@@ -1,0 +1,59 @@
+"use client";
+
+import { createClient, createAccount, generatePrivateKey } from "genlayer-js";
+import { studionet, localnet } from "genlayer-js/chains";
+import type { GenLayerClient } from "genlayer-js/types";
+import type { GenLayerChain } from "genlayer-js/types";
+
+let _client: GenLayerClient<GenLayerChain> | null = null;
+
+function rpc() {
+  return process.env.NEXT_PUBLIC_GENLAYER_RPC_URL || "";
+}
+
+function pickChain() {
+  const endpoint = rpc();
+  if (endpoint.includes("localhost") || endpoint.includes("127.0.0.1")) {
+    return localnet;
+  }
+  return studionet;
+}
+
+export function getClient(): GenLayerClient<GenLayerChain> {
+  if (!_client) {
+    const endpoint = rpc();
+    _client = createClient({
+      chain: pickChain(),
+      ...(endpoint ? { endpoint } : {}),
+    });
+  }
+  return _client;
+}
+
+export async function getClientReady(): Promise<GenLayerClient<GenLayerChain>> {
+  if (typeof window !== "undefined" && window.ethereum) {
+    const expected = "0x" + (61999).toString(16);
+    const current = (await window.ethereum.request({ method: "eth_chainId" })) as string;
+    if (current.toLowerCase() !== expected.toLowerCase()) {
+      const { switchToStudionet } = await import("@/lib/wallet/injected");
+      await switchToStudionet();
+    }
+  }
+  return getClient();
+}
+
+export function setClientFromAddress(address: `0x${string}`) {
+  const endpoint = rpc();
+  _client = createClient({
+    chain: pickChain(),
+    account: address,
+    ...(endpoint ? { endpoint } : {}),
+  });
+  return address;
+}
+
+export function clearClient() {
+  _client = null;
+}
+
+export { createAccount, generatePrivateKey };

@@ -1,0 +1,126 @@
+@import "tailwindcss";
+
+@theme {
+  /* OracleBoard investment terminal palette */
+  --color-obsidian: #07080A;
+  --color-graphite: #14171C;
+  --color-navy: #101827;
+  --color-gold: #D6B25E;
+  --color-gold-dim: #9C7D38;
+  --color-signal: #56F39A;
+  --color-signal-dim: #2A7A4D;
+  --color-risk: #FF5C5C;
+  --color-risk-dim: #7A2020;
+  --color-memo: #F4F1E8;
+  --color-slate: #8B93A7;
+  --color-slate-dim: #4A5568;
+  --color-border: #1E2530;
+  --color-border-bright: #2D3748;
+
+  /* Typography */
+  --font-heading: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", "Fira Code", monospace;
+}
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    background-color: #07080A;
+    color: #F4F1E8;
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    min-height: 100vh;
+    background-color: #07080A;
+  }
+
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: #07080A;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: #2D3748;
+    border-radius: 2px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #D6B25E;
+  }
+
+  ::selection {
+    background-color: rgba(214, 178, 94, 0.3);
+    color: #F4F1E8;
+  }
+}
+
+@layer utilities {
+  .font-heading { font-family: var(--font-heading); }
+  .font-body { font-family: var(--font-body); }
+  .font-mono { font-family: var(--font-mono); }
+
+  .text-gold { color: #D6B25E; }
+  .text-signal { color: #56F39A; }
+  .text-risk { color: #FF5C5C; }
+  .text-memo { color: #F4F1E8; }
+  .text-slate { color: #8B93A7; }
+
+  .bg-obsidian { background-color: #07080A; }
+  .bg-graphite { background-color: #14171C; }
+  .bg-navy { background-color: #101827; }
+
+  .border-border { border-color: #1E2530; }
+  .border-border-bright { border-color: #2D3748; }
+  .border-gold { border-color: #D6B25E; }
+
+  .score-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: #1E2530;
+    overflow: hidden;
+  }
+
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(214, 178, 94, 0.15);
+  }
+
+  .glow-signal {
+    box-shadow: 0 0 20px rgba(86, 243, 154, 0.15);
+  }
+
+  .blink {
+    animation: blink 1.4s ease-in-out infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .mono { font-family: var(--font-mono); }
+
+  .card {
+    background-color: #14171C;
+    border: 1px solid #1E2530;
+    border-radius: 8px;
+  }
+
+  .card-hover {
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+
+  .card-hover:hover {
+    border-color: #2D3748;
+    background-color: #191D24;
+  }
+}
