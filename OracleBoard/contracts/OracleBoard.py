@@ -13,37 +13,14 @@ import json
 # ---------------------------------------------------------------------------
 
 
-ALLOWED_RECOMMENDATIONS = {
+ALLOWED_RECOMMENDATIONS = [
     "STRONG_INVEST", "INVEST", "WATCHLIST",
     "MORE_DILIGENCE", "PASS", "HIGH_RISK_PASS",
-}
+]
 
-ALLOWED_RISK_LEVELS = {"LOW", "MEDIUM", "HIGH", "CRITICAL"}
+ALLOWED_RISK_LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
-ALLOWED_CONFIDENCE = {"LOW", "MODERATE", "HIGH"}
-
-
-def clamp_score(v) -> u32:
-    try:
-        n = int(v)
-        if n < 0:
-            return u32(0)
-        if n > 100:
-            return u32(100)
-        return u32(n)
-    except Exception:
-        return u32(50)
-
-
-def score_to_band(score: u32) -> str:
-    s = int(score)
-    if s >= 80:
-        return "STRONG"
-    elif s >= 60:
-        return "PROMISING"
-    elif s >= 40:
-        return "DEVELOPING"
-    return "WEAK"
+ALLOWED_CONFIDENCE = ["LOW", "MODERATE", "HIGH"]
 
 
 def to_json(value) -> str:
@@ -59,13 +36,41 @@ def safe_loads(raw: str, fallback):
         return fallback
 
 
+def clamp_score(v) -> int:
+    try:
+        n = int(v)
+        if n < 0:
+            return 0
+        if n > 100:
+            return 100
+        return n
+    except Exception:
+        return 50
+
+
+def score_to_band(score: int) -> str:
+    if score >= 80:
+        return "STRONG"
+    elif score >= 60:
+        return "PROMISING"
+    elif score >= 40:
+        return "DEVELOPING"
+    return "WEAK"
+
+
 class OracleBoard(gl.Contract):
-    # Storage — class-level annotations, zero-initialized automatically
-    startups: TreeMap[str, str]        # startup_id -> StartupDossier JSON
-    evaluations: TreeMap[str, str]     # startup_id -> EvaluationResult JSON
-    round_updates: TreeMap[str, str]   # update_id  -> RoundUpdate JSON
-    rereview_results: TreeMap[str, str]  # startup_id -> ReReviewResult JSON
+    startups: TreeMap[str, str]
+    evaluations: TreeMap[str, str]
+    round_updates: TreeMap[str, str]
+    rereview_results: TreeMap[str, str]
     startup_ids: DynArray[str]
+
+    def __init__(self) -> None:
+        self.startups = TreeMap()
+        self.evaluations = TreeMap()
+        self.round_updates = TreeMap()
+        self.rereview_results = TreeMap()
+        self.startup_ids = DynArray()
 
     # -----------------------------------------------------------------------
     # create_startup_dossier
@@ -157,8 +162,7 @@ class OracleBoard(gl.Contract):
             if not raw:
                 continue
             d = safe_loads(raw, {})
-            ev_raw = self.evaluations.get(sid, "")
-            ev = safe_loads(ev_raw, None)
+            ev = safe_loads(self.evaluations.get(sid, ""), None)
             rr = safe_loads(self.rereview_results.get(sid, ""), None)
             entry = {
                 "startup_id": d.get("startup_id", ""),
@@ -190,7 +194,7 @@ class OracleBoard(gl.Contract):
         dossier["review_status"] = "CONSENSUS_PENDING"
         self.startups[startup_id] = to_json(dossier)
 
-        # Copy dossier fields to local memory before the nondet block
+        # Copy all needed fields to local memory before the nondet block
         startup_name = dossier.get("startup_name", "")
         one_liner = dossier.get("one_liner", "")
         sector = dossier.get("sector", "")
@@ -205,11 +209,10 @@ class OracleBoard(gl.Contract):
         use_of_funds = dossier.get("use_of_funds", "")
         risks = dossier.get("risk_disclosures", "")
 
-        prompt = f"""You are participating in a decentralized startup investment committee.
+        prompt_text = f"""You are participating in a decentralized startup investment committee.
 Evaluate the startup based on the supplied dossier.
 Do not invent unavailable metrics. Do not treat marketing language as proof.
 Separate evidence-backed strengths from assumptions.
-Return strict JSON only — no markdown, no code fences, no explanation.
 
 STARTUP DOSSIER:
 Name: {startup_name}
@@ -226,20 +229,7 @@ Round Type: {round_type}
 Use of Funds: {use_of_funds}
 Risk Disclosures: {risks}
 
-EVALUATION RUBRIC:
-- market_score (0-100): Is the market large, urgent, growing, and accessible?
-- founder_score (0-100): Does the founder show domain insight or unfair advantage?
-- execution_score (0-100): Does the team have skills to build and ship?
-- traction_score (0-100): Are metrics real, meaningful, and directionally strong?
-- business_model_score (0-100): Is the monetization plausible and scalable?
-- defensibility_score (0-100): Is this startup differentiated against alternatives?
-- investment_score (0-100): Is this an interesting opportunity relative to stage, risk, and upside?
-
-ALLOWED recommendation values: STRONG_INVEST, INVEST, WATCHLIST, MORE_DILIGENCE, PASS, HIGH_RISK_PASS
-ALLOWED risk_level values: LOW, MEDIUM, HIGH, CRITICAL
-ALLOWED confidence values: LOW, MODERATE, HIGH
-
-Return JSON matching exactly this structure:
+Return ONLY a JSON object with this exact structure, no markdown, no explanation:
 {{
   "recommendation": "WATCHLIST",
   "market_score": 72,
@@ -260,48 +250,55 @@ Return JSON matching exactly this structure:
   "risk_summary": "Key risks to the investment thesis.",
   "red_flags": "Specific red flags or concerns.",
   "re_review_conditions": "What evidence would upgrade the recommendation."
-}}"""
+}}
 
-        def leader_fn():
-            return gl.nondet.exec_prompt(prompt, response_format="json")
+recommendation must be one of: STRONG_INVEST, INVEST, WATCHLIST, MORE_DILIGENCE, PASS, HIGH_RISK_PASS
+risk_level must be one of: LOW, MEDIUM, HIGH, CRITICAL
+confidence must be one of: LOW, MODERATE, HIGH
+All score fields must be integers from 0 to 100."""
 
-        def validator_fn(leader_result) -> bool:
-            if not isinstance(leader_result, gl.vm.Return):
-                return False
-            data = leader_result.calldata
-            if not isinstance(data, dict):
-                return False
-            if data.get("recommendation") not in ALLOWED_RECOMMENDATIONS:
-                return False
-            if data.get("risk_level") not in ALLOWED_RISK_LEVELS:
-                return False
-            if data.get("confidence") not in ALLOWED_CONFIDENCE:
-                return False
-            for key in ("market_score", "founder_score", "execution_score",
-                        "traction_score", "business_model_score",
-                        "defensibility_score", "investment_score"):
-                v = data.get(key)
-                if not isinstance(v, (int, float)):
-                    return False
-                if not (0 <= int(v) <= 100):
-                    return False
-            return True
+        task = (
+            "Evaluate the startup investment opportunity and return a structured JSON investment memo "
+            "with numeric scores (0-100) for each dimension, a recommendation, risk level, confidence, "
+            "and written assessments for each evaluation area."
+        )
+
+        criteria = (
+            "The response must be valid JSON only. "
+            "recommendation must be one of: STRONG_INVEST, INVEST, WATCHLIST, MORE_DILIGENCE, PASS, HIGH_RISK_PASS. "
+            "risk_level must be one of: LOW, MEDIUM, HIGH, CRITICAL. "
+            "confidence must be one of: LOW, MODERATE, HIGH. "
+            "All score fields (market_score, founder_score, execution_score, traction_score, "
+            "business_model_score, defensibility_score, investment_score) must be integers from 0 to 100. "
+            "memo_summary, market_thesis, founder_assessment, execution_assessment, traction_assessment, "
+            "risk_summary, red_flags, re_review_conditions must be non-empty strings."
+        )
+
+        def nondet_evaluate() -> str:
+            return prompt_text
 
         try:
-            raw_dict = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+            result_raw = gl.eq_principle.prompt_non_comparative(
+                nondet_evaluate,
+                task=task,
+                criteria=criteria,
+            )
         except Exception:
             d2 = safe_loads(self.startups.get(startup_id, ""), {})
             d2["review_status"] = "FAILED"
             self.startups[startup_id] = to_json(d2)
             return
 
-        market_score = clamp_score(raw_dict.get("market_score", 50))
-        founder_score = clamp_score(raw_dict.get("founder_score", 50))
-        execution_score = clamp_score(raw_dict.get("execution_score", 50))
-        traction_score = clamp_score(raw_dict.get("traction_score", 50))
-        business_model_score = clamp_score(raw_dict.get("business_model_score", 50))
-        defensibility_score = clamp_score(raw_dict.get("defensibility_score", 50))
-        investment_score = clamp_score(raw_dict.get("investment_score", 50))
+        raw_str = result_raw.strip() if isinstance(result_raw, str) else str(result_raw)
+        backticks = "``" + "`"
+        raw_str = raw_str.replace(backticks + "json", "").replace(backticks, "").strip()
+
+        raw_dict = safe_loads(raw_str, None)
+        if not raw_dict or not isinstance(raw_dict, dict):
+            d2 = safe_loads(self.startups.get(startup_id, ""), {})
+            d2["review_status"] = "FAILED"
+            self.startups[startup_id] = to_json(d2)
+            return
 
         rec = str(raw_dict.get("recommendation", "PASS")).upper()
         if rec not in ALLOWED_RECOMMENDATIONS:
@@ -313,16 +310,24 @@ Return JSON matching exactly this structure:
         if conf not in ALLOWED_CONFIDENCE:
             conf = "MODERATE"
 
+        market_score = clamp_score(raw_dict.get("market_score", 50))
+        founder_score = clamp_score(raw_dict.get("founder_score", 50))
+        execution_score = clamp_score(raw_dict.get("execution_score", 50))
+        traction_score = clamp_score(raw_dict.get("traction_score", 50))
+        business_model_score = clamp_score(raw_dict.get("business_model_score", 50))
+        defensibility_score = clamp_score(raw_dict.get("defensibility_score", 50))
+        investment_score = clamp_score(raw_dict.get("investment_score", 50))
+
         evaluation = {
             "startup_id": startup_id,
             "recommendation": rec,
-            "market_score": int(market_score),
-            "founder_score": int(founder_score),
-            "execution_score": int(execution_score),
-            "traction_score": int(traction_score),
-            "business_model_score": int(business_model_score),
-            "defensibility_score": int(defensibility_score),
-            "investment_score": int(investment_score),
+            "market_score": market_score,
+            "founder_score": founder_score,
+            "execution_score": execution_score,
+            "traction_score": traction_score,
+            "business_model_score": business_model_score,
+            "defensibility_score": defensibility_score,
+            "investment_score": investment_score,
             "market_band": score_to_band(market_score),
             "founder_band": score_to_band(founder_score),
             "execution_band": score_to_band(execution_score),
@@ -418,14 +423,13 @@ Return JSON matching exactly this structure:
         founder_resp = update.get("founder_response", "")
         review_reason = update.get("requested_review_reason", "")
 
-        prompt = f"""You are participating in a decentralized startup investment committee re-review.
+        prompt_text = f"""You are participating in a decentralized startup investment committee re-review.
 
 The startup previously received recommendation: {orig_rec}
 Original memo summary: {orig_memo}
 
 The founder has submitted new information. Evaluate whether this materially changes the investment thesis.
 Do not invent metrics. Do not treat marketing language as proof.
-Return strict JSON only — no markdown, no code fences, no explanation.
 
 STARTUP:
 Name: {startup_name}
@@ -444,13 +448,7 @@ Founder Response: {founder_resp}
 Re-review Reason: {review_reason}
 
 Has the startup de-risked sufficiently to warrant upgrading the recommendation?
-Are the new metrics credible and meaningful relative to stage?
-
-ALLOWED recommendation values: STRONG_INVEST, INVEST, WATCHLIST, MORE_DILIGENCE, PASS, HIGH_RISK_PASS
-ALLOWED risk_level values: LOW, MEDIUM, HIGH, CRITICAL
-ALLOWED confidence values: LOW, MODERATE, HIGH
-
-Return JSON matching exactly this structure:
+Return ONLY a JSON object with this exact structure, no markdown, no explanation:
 {{
   "recommendation": "INVEST",
   "market_score": 75,
@@ -471,26 +469,48 @@ Return JSON matching exactly this structure:
   "risk_summary": "Remaining risks post-update.",
   "red_flags": "Remaining red flags or new concerns.",
   "re_review_conditions": "What further evidence would complete the diligence."
-}}"""
+}}
 
-        def leader_fn():
-            return gl.nondet.exec_prompt(prompt, response_format="json")
+recommendation must be one of: STRONG_INVEST, INVEST, WATCHLIST, MORE_DILIGENCE, PASS, HIGH_RISK_PASS
+risk_level must be one of: LOW, MEDIUM, HIGH, CRITICAL
+confidence must be one of: LOW, MODERATE, HIGH
+All score fields must be integers from 0 to 100."""
 
-        def validator_fn(leader_result) -> bool:
-            if not isinstance(leader_result, gl.vm.Return):
-                return False
-            data = leader_result.calldata
-            if not isinstance(data, dict):
-                return False
-            if data.get("recommendation") not in ALLOWED_RECOMMENDATIONS:
-                return False
-            if data.get("risk_level") not in ALLOWED_RISK_LEVELS:
-                return False
-            return True
+        task = (
+            "Re-evaluate the startup investment opportunity given new founder-submitted evidence. "
+            "Determine whether the updated information materially changes the investment thesis "
+            "and return a structured JSON investment memo."
+        )
+
+        criteria = (
+            "The response must be valid JSON only. "
+            "recommendation must be one of: STRONG_INVEST, INVEST, WATCHLIST, MORE_DILIGENCE, PASS, HIGH_RISK_PASS. "
+            "risk_level must be one of: LOW, MEDIUM, HIGH, CRITICAL. "
+            "confidence must be one of: LOW, MODERATE, HIGH. "
+            "All score fields must be integers from 0 to 100."
+        )
+
+        def nondet_rereview() -> str:
+            return prompt_text
 
         try:
-            raw_dict = gl.vm.run_nondet_unsafe(leader_fn, validator_fn)
+            result_raw = gl.eq_principle.prompt_non_comparative(
+                nondet_rereview,
+                task=task,
+                criteria=criteria,
+            )
         except Exception:
+            u2 = safe_loads(self.round_updates.get(update_id, ""), {})
+            u2["rereview_status"] = "REREVIEW_REJECTED"
+            self.round_updates[update_id] = to_json(u2)
+            return
+
+        raw_str = result_raw.strip() if isinstance(result_raw, str) else str(result_raw)
+        backticks = "``" + "`"
+        raw_str = raw_str.replace(backticks + "json", "").replace(backticks, "").strip()
+
+        raw_dict = safe_loads(raw_str, None)
+        if not raw_dict or not isinstance(raw_dict, dict):
             u2 = safe_loads(self.round_updates.get(update_id, ""), {})
             u2["rereview_status"] = "REREVIEW_REJECTED"
             self.round_updates[update_id] = to_json(u2)
@@ -520,13 +540,13 @@ Return JSON matching exactly this structure:
             "original_recommendation": orig_rec,
             "rereview_status": "REREVIEW_READY",
             "recommendation": rec,
-            "market_score": int(market_score),
-            "founder_score": int(founder_score),
-            "execution_score": int(execution_score),
-            "traction_score": int(traction_score),
-            "business_model_score": int(business_model_score),
-            "defensibility_score": int(defensibility_score),
-            "investment_score": int(investment_score),
+            "market_score": market_score,
+            "founder_score": founder_score,
+            "execution_score": execution_score,
+            "traction_score": traction_score,
+            "business_model_score": business_model_score,
+            "defensibility_score": defensibility_score,
+            "investment_score": investment_score,
             "market_band": score_to_band(market_score),
             "founder_band": score_to_band(founder_score),
             "execution_band": score_to_band(execution_score),
