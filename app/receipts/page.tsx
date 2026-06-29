@@ -7,7 +7,7 @@ import OathSeal from "@/components/oath/OathSeal";
 import StatusRibbon from "@/components/oath/StatusRibbon";
 import ExplorerLink from "@/components/oath/ExplorerLink";
 import { getExplorerContractUrl } from "@/lib/genlayer/client";
-import { formatDeadline, shortAddr } from "@/lib/utils";
+import { formatDeadline, formatIsoDate, shortAddr } from "@/lib/utils";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { VerdictReceipt } from "@/lib/genlayer/types";
@@ -65,7 +65,7 @@ export default function ReceiptsPage() {
       winning_side: "fulfilment" as const,
       short_reason: "Public sources confirm beta shipped before deadline with required features.",
       canonical_json: "",
-      resolved_at: Math.floor(Date.now() / 1000) - 86400,
+      resolved_at: new Date(Date.now() - 86400000).toISOString(),
       resolver: "0xabc123def456000000000000000000000000cafe",
     } as VerdictReceipt,
   };
@@ -133,7 +133,7 @@ export default function ReceiptsPage() {
                         Confidence: {r.verdict.confidence}%
                       </span>
                       <span className="font-mono text-xs text-ink-grey">
-                        {formatDeadline(r.verdict.resolved_at)}
+                        {formatIsoDate(r.verdict.resolved_at)}
                       </span>
                     </div>
                   </div>

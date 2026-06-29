@@ -35,7 +35,7 @@ export interface Oath {
   exclusions: string;
   stakeholder_notes: string;
   category: string;
-  created_at: number;
+  created_at: string;
   status: OathStatus;
   settled: boolean;
   appeal_count: number;
@@ -48,7 +48,7 @@ export interface EvidencePacket {
   source_type: string;
   claim: string;
   side: EvidenceSide;
-  submitted_at: number;
+  submitted_at: string;
 }
 
 export interface VerdictReceipt {
@@ -59,7 +59,7 @@ export interface VerdictReceipt {
   winning_side: WinningSide;
   short_reason: string;
   canonical_json: string;
-  resolved_at: number;
+  resolved_at: string;
   resolver: string;
 }
 
@@ -69,7 +69,7 @@ export interface AppealPacket {
   basis: AppealBasis;
   new_evidence_url: string;
   argument: string;
-  submitted_at: number;
+  submitted_at: string;
   resolved: boolean;
 }
 

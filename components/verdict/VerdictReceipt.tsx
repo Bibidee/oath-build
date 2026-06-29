@@ -5,7 +5,7 @@ import { Copy, CheckCircle } from "lucide-react";
 import { useState } from "react";
 import OathSeal from "@/components/oath/OathSeal";
 import ExplorerLink from "@/components/oath/ExplorerLink";
-import { formatDeadline, shortAddr } from "@/lib/utils";
+import { formatIsoDate, shortAddr } from "@/lib/utils";
 import { getExplorerTxUrl } from "@/lib/genlayer/client";
 import type { VerdictReceipt as VerdictReceiptType, Oath } from "@/lib/genlayer/types";
 
@@ -26,7 +26,7 @@ Confidence: ${verdict.confidence}%
 Source Alignment: ${verdict.source_alignment}
 Winning Side: ${verdict.winning_side}
 Reason: ${verdict.short_reason}
-Resolved: ${formatDeadline(verdict.resolved_at)}
+Resolved: ${formatIsoDate(verdict.resolved_at)}
 Resolver: ${shortAddr(verdict.resolver)}
 ────────────────────────────────────
 Powered by GenLayer · StudioNet`;
@@ -96,7 +96,7 @@ Powered by GenLayer · StudioNet`;
           <div className="bg-court-slate/40 rounded-lg p-3">
             <p className="font-mono text-xs text-ink-grey mb-1">Resolved</p>
             <p className="font-mono text-sm font-medium text-ivory-record">
-              {formatDeadline(verdict.resolved_at)}
+              {formatIsoDate(verdict.resolved_at)}
             </p>
           </div>
         </div>

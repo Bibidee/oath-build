@@ -7,7 +7,7 @@ import OathSeal from "@/components/oath/OathSeal";
 import StatusRibbon from "@/components/oath/StatusRibbon";
 import ExplorerLink from "@/components/oath/ExplorerLink";
 import { getExplorerContractUrl } from "@/lib/genlayer/client";
-import { DEMO_OATHS, formatDeadline, shortAddr } from "@/lib/utils";
+import { DEMO_OATHS, formatDeadline, formatIsoDate, shortAddr } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getOathCount } from "@/lib/genlayer/client";
 
@@ -33,7 +33,7 @@ const sampleVerdict = {
   confidence: 86,
   source_alignment: "strong",
   short_reason: "Public sources confirm beta shipped before deadline with wallet login, dashboard, and demo flow.",
-  resolved_at: Math.floor(Date.now() / 1000) - 86400,
+  resolved_at: new Date(Date.now() - 86400000).toISOString(),
   resolver: "0xabc123def456000000000000000000000000cafe",
 };
 
@@ -160,7 +160,7 @@ export default function Home() {
               &ldquo;{sampleVerdict.short_reason}&rdquo;
             </p>
             <p className="font-mono text-xs text-ink-grey">
-              Resolved by {shortAddr(sampleVerdict.resolver)} · {formatDeadline(sampleVerdict.resolved_at)}
+              Resolved by {shortAddr(sampleVerdict.resolver)} · {formatIsoDate(sampleVerdict.resolved_at)}
             </p>
           </div>
         </motion.div>
