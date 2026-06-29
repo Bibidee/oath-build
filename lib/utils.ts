@@ -19,6 +19,12 @@ export function formatDeadline(unix: number): string {
   });
 }
 
+export function formatIsoDate(iso: string): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" });
+}
+
 export function isPastDeadline(unix: number): boolean {
   return Date.now() / 1000 > unix;
 }

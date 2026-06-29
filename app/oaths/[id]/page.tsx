@@ -28,24 +28,28 @@ export default function OathDetailPage({ params }: Props) {
     queryKey: ["oath", oathId],
     queryFn: () => getOath(oathId),
     enabled: !isNaN(oathId),
+    refetchInterval: (query) => (query.state.data?.settled ? false : 6000),
   });
 
   const { data: evidence = [] } = useQuery({
     queryKey: ["evidence", oathId],
     queryFn: () => getEvidence(oathId),
     enabled: !isNaN(oathId),
+    refetchInterval: oath?.settled ? false : 6000,
   });
 
   const { data: verdict } = useQuery({
     queryKey: ["verdict", oathId],
     queryFn: () => getVerdict(oathId),
     enabled: !isNaN(oathId),
+    refetchInterval: oath?.settled ? false : 6000,
   });
 
   const { data: appeals = [] } = useQuery({
     queryKey: ["appeals", oathId],
     queryFn: () => getAppeals(oathId),
     enabled: !isNaN(oathId),
+    refetchInterval: oath?.settled ? false : 6000,
   });
 
   if (isLoading) {

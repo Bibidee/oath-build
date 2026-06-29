@@ -2,7 +2,7 @@
 
 import { motion, AnimatePresence } from "framer-motion";
 import { ExternalLink } from "lucide-react";
-import { formatDeadline, shortAddr } from "@/lib/utils";
+import { formatIsoDate, shortAddr } from "@/lib/utils";
 import type { EvidencePacket } from "@/lib/genlayer/types";
 
 interface Props {
@@ -94,7 +94,7 @@ export default function EvidenceWall({ evidence }: Props) {
                   {shortAddr(ev.submitter)}
                 </span>
                 <span className="font-mono text-xs text-ink-grey">
-                  {formatDeadline(ev.submitted_at)}
+                  {formatIsoDate(ev.submitted_at)}
                 </span>
               </div>
             </motion.div>
