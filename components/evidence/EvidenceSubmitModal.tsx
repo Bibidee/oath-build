@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -39,6 +39,18 @@ export default function EvidenceSubmitModal({ oathId, open, onClose, onSuccess }
   const [loading, setLoading] = useState(false);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset form every time the modal opens
+  useEffect(() => {
+    if (open) {
+      setSourceUrl("");
+      setSourceType("other");
+      setClaim("");
+      setSide("fulfilment");
+      setTxHash(null);
+      setError(null);
+    }
+  }, [open]);
 
   const handleSubmit = async () => {
     if (!account) { connect(); return; }
