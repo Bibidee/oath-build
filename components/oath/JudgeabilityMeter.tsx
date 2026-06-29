@@ -18,43 +18,35 @@ export default function JudgeabilityMeter({ data }: Props) {
   const score = judgeabilityScore(data);
 
   const label =
-    score >= 80
-      ? "Highly judgeable"
-      : score >= 60
-      ? "Likely judgeable"
-      : score >= 40
-      ? "Partially judgeable"
-      : "Low judgeability";
+    score >= 80 ? "Highly judgeable"
+    : score >= 60 ? "Likely judgeable"
+    : score >= 40 ? "Partially judgeable"
+    : "Low judgeability";
 
   const color =
-    score >= 80
-      ? "#19C37D"
-      : score >= 60
-      ? "#D6A84F"
-      : score >= 40
-      ? "#F59E0B"
-      : "#EF4444";
+    score >= 80 ? "var(--verdict-green)"
+    : score >= 60 ? "var(--verdict-gold)"
+    : score >= 40 ? "#F59E0B"
+    : "var(--breach-red)";
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <span className="font-mono text-xs text-ink-grey uppercase tracking-widest">Judgeability</span>
+        <span className="font-mono text-xs text-ash uppercase tracking-[0.2em]">Judgeability Score</span>
         <span className="font-mono text-sm font-medium" style={{ color }}>
           {score} / 100
         </span>
       </div>
-      <div className="h-1.5 bg-court-slate rounded-full overflow-hidden">
+      <div className="h-1 bg-court-brown/60 rounded-full overflow-hidden border border-[var(--rule-line)]">
         <motion.div
           className="h-full rounded-full"
           style={{ backgroundColor: color }}
           initial={{ width: 0 }}
           animate={{ width: `${score}%` }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
+          transition={{ duration: 0.7, ease: "easeOut", delay: 0.2 }}
         />
       </div>
-      <p className="font-mono text-xs" style={{ color }}>
-        {label}
-      </p>
+      <p className="font-mono text-xs" style={{ color }}>{label}</p>
     </div>
   );
 }

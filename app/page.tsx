@@ -2,31 +2,17 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { ArrowRight, Scale, Shield, Gavel } from "lucide-react";
-import OathSeal from "@/components/oath/OathSeal";
-import StatusRibbon from "@/components/oath/StatusRibbon";
-import ExplorerLink from "@/components/oath/ExplorerLink";
-import { getExplorerContractUrl } from "@/lib/genlayer/client";
-import { DEMO_OATHS, formatDeadline, formatIsoDate, shortAddr } from "@/lib/utils";
 import { useQuery } from "@tanstack/react-query";
 import { getOathCount } from "@/lib/genlayer/client";
+import { getExplorerContractUrl } from "@/lib/genlayer/client";
+import { DEMO_OATHS, formatDeadline, formatIsoDate, shortAddr } from "@/lib/utils";
+import ExplorerLink from "@/components/oath/ExplorerLink";
 
-const steps = [
-  {
-    icon: <Scale size={20} />,
-    title: "Lock Your Promise",
-    desc: "Write your commitment in plain English. Set a deadline, success criteria, and accepted public evidence sources.",
-  },
-  {
-    icon: <Shield size={20} />,
-    title: "Submit Evidence",
-    desc: "Anyone can submit public URLs supporting or challenging fulfilment after the deadline passes.",
-  },
-  {
-    icon: <Gavel size={20} />,
-    title: "GenLayer Judges",
-    desc: "Decentralized AI validators independently inspect the oath and evidence, then reach consensus on a verdict.",
-  },
+const lifecycle = [
+  { step: "I", label: "Promise", desc: "A plain-English commitment locked on-chain with a deadline, success criteria, and accepted evidence sources." },
+  { step: "II", label: "Evidence", desc: "Anyone may submit public URLs that support or challenge fulfilment. The record is open to all witnesses." },
+  { step: "III", label: "Judgment", desc: "GenLayer validators independently inspect the oath and evidence, then reach consensus on a verdict." },
+  { step: "IV", label: "Receipt", desc: "A permanent on-chain receipt records the verdict, confidence score, and reasoning — public forever." },
 ];
 
 const sampleVerdict = {
@@ -47,36 +33,78 @@ export default function Home() {
   });
 
   return (
-    <div className="min-h-screen ledger-grid">
-      {/* Hero */}
-      <section className="relative max-w-7xl mx-auto px-4 pt-20 pb-16 text-center">
+    <div className="min-h-screen ledger-bg">
+
+      {/* === COURT ENTRANCE HERO === */}
+      <section className="relative max-w-5xl mx-auto px-6 pt-20 pb-24 text-center">
+
         {!hasContract && (
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full border border-partial-amber/40 bg-partial-amber/10 font-mono text-xs text-partial-amber mb-8">
-            Demo mode — deploy the contract and set NEXT_PUBLIC_OATH_CONTRACT_ADDRESS
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded border border-verdict-gold/30 bg-verdict-gold/05 font-mono text-xs text-verdict-gold mb-10">
+            Demo mode — contract not yet wired
           </div>
         )}
 
-        <motion.div initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}>
-          <h1 className="font-serif text-6xl md:text-8xl text-ivory-record leading-none mb-6">
+        {/* Court seal emblem */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.7, ease: "easeOut" }}
+          className="flex justify-center mb-10"
+        >
+          <div className="relative glow-seal">
+            <svg width="120" height="120" viewBox="0 0 120 120" fill="none">
+              <circle cx="60" cy="60" r="58" stroke="var(--seal-red)" strokeWidth="1.5"/>
+              <circle cx="60" cy="60" r="50" stroke="var(--seal-red)" strokeWidth="0.5" strokeDasharray="3 3" opacity="0.6"/>
+              <circle cx="60" cy="60" r="42" stroke="var(--seal-red)" strokeWidth="0.5" opacity="0.3"/>
+              {/* Scales of justice */}
+              <line x1="60" y1="28" x2="60" y2="80" stroke="var(--seal-red)" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="38" y1="42" x2="82" y2="42" stroke="var(--seal-red)" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M38 42 L32 58 L44 58 Z" stroke="var(--seal-red)" strokeWidth="1" fill="var(--seal-red)" fillOpacity="0.15"/>
+              <path d="M82 42 L76 58 L88 58 Z" stroke="var(--seal-red)" strokeWidth="1" fill="var(--seal-red)" fillOpacity="0.15"/>
+              <line x1="54" y1="80" x2="66" y2="80" stroke="var(--seal-red)" strokeWidth="1.5" strokeLinecap="round"/>
+              {/* Ring text marks */}
+              {[0,30,60,90,120,150,180,210,240,270,300,330].map((a, i) => (
+                <circle
+                  key={i}
+                  cx={60 + 54 * Math.cos((a - 90) * Math.PI / 180)}
+                  cy={60 + 54 * Math.sin((a - 90) * Math.PI / 180)}
+                  r="1.5"
+                  fill="var(--seal-red)"
+                  opacity="0.5"
+                />
+              ))}
+            </svg>
+          </div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+        >
+          <p className="font-mono text-xs text-ash uppercase tracking-[0.3em] mb-4">The Ledger Court</p>
+          <h1 className="font-display text-6xl md:text-8xl text-parchment leading-[0.9] mb-6">
             Promises with<br />
-            <span className="text-witness-gold">consequences.</span>
+            <em className="text-seal-red-bright not-italic">consequences.</em>
           </h1>
-          <p className="text-ink-grey text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-10">
-            Oath locks plain-English commitments on-chain and lets GenLayer&apos;s decentralized AI validators judge
-            whether the promise was fulfilled — based only on public evidence.
+          <p className="text-ash-light text-lg max-w-xl mx-auto leading-relaxed mb-12">
+            Oath is a public accountability layer. Lock plain-English commitments on-chain.
+            GenLayer&apos;s decentralised AI validators judge whether the promise was kept —
+            based only on public evidence.
           </p>
+
           <div className="flex items-center justify-center gap-4 flex-wrap">
             <Link
               href="/create"
-              className="flex items-center gap-2 px-6 py-3 rounded-lg bg-witness-gold/10 border border-witness-gold/40 text-witness-gold hover:bg-witness-gold/20 transition-all font-mono text-sm"
+              className="px-8 py-3 bg-seal-red hover:bg-seal-red-bright transition-colors font-mono text-xs text-parchment uppercase tracking-widest rounded"
             >
-              Create an Oath <ArrowRight size={14} />
+              Draft an Oath
             </Link>
             <Link
               href="/oaths"
-              className="flex items-center gap-2 px-6 py-3 rounded-lg border border-glass-line text-ink-grey hover:text-ivory-record hover:border-ivory-record/30 transition-all font-mono text-sm"
+              className="px-8 py-3 border border-[var(--rule-line-strong)] hover:border-parchment-dim/40 transition-colors font-mono text-xs text-ash-light uppercase tracking-widest rounded"
             >
-              Explore Oaths
+              Enter the Ledger
             </Link>
           </div>
         </motion.div>
@@ -85,111 +113,104 @@ export default function Home() {
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="mt-12 flex items-center justify-center gap-8"
+            transition={{ delay: 0.5 }}
+            className="mt-14 flex items-center justify-center gap-10"
           >
             <div className="text-center">
-              <p className="font-mono text-3xl text-signal-cyan">{oathCount ?? "—"}</p>
-              <p className="font-mono text-xs text-ink-grey mt-1">Oaths on-chain</p>
+              <p className="font-display text-4xl text-parchment">{oathCount ?? "—"}</p>
+              <p className="font-mono text-xs text-ash mt-1 uppercase tracking-widest">Oaths on-chain</p>
             </div>
-            <div className="w-px h-10 bg-glass-line" />
+            <div className="h-10 w-px bg-[var(--rule-line)]" />
             <div className="text-center">
-              <ExplorerLink href={getExplorerContractUrl()} label="StudioNet Contract" />
-              <p className="font-mono text-xs text-ink-grey mt-1">GenLayer StudioNet</p>
+              <ExplorerLink href={getExplorerContractUrl()} label="View Contract" />
+              <p className="font-mono text-xs text-ash mt-1 uppercase tracking-widest">GenLayer StudioNet</p>
             </div>
           </motion.div>
         )}
       </section>
 
-      {/* How it works */}
-      <section className="max-w-5xl mx-auto px-4 pb-20">
-        <p className="font-mono text-xs text-ink-grey uppercase tracking-widest text-center mb-10">
-          How Settlement Works
-        </p>
-        <div className="grid md:grid-cols-3 gap-6">
-          {steps.map((s, i) => (
+      {/* === LIFECYCLE === */}
+      <section className="max-w-5xl mx-auto px-6 pb-24">
+        <hr className="divider-rule mb-16" />
+        <p className="font-mono text-xs text-ash uppercase tracking-[0.3em] text-center mb-12">The Oath Lifecycle</p>
+        <div className="grid md:grid-cols-4 gap-px bg-[var(--rule-line)]">
+          {lifecycle.map((l, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.15 * i }}
-              className="glass rounded-xl p-6 space-y-3"
+              transition={{ delay: 0.1 * i }}
+              className="court-paper p-6 space-y-3"
             >
-              <div className="text-witness-gold">{s.icon}</div>
-              <h3 className="font-serif text-lg text-ivory-record">{s.title}</h3>
-              <p className="text-ink-grey text-sm leading-relaxed">{s.desc}</p>
+              <div className="flex items-baseline gap-3">
+                <span className="font-display text-3xl text-seal-red opacity-60">{l.step}</span>
+                <span className="font-mono text-xs text-verdict-gold uppercase tracking-widest">{l.label}</span>
+              </div>
+              <p className="text-ash-light text-sm leading-relaxed">{l.desc}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
-      {/* Sample receipt */}
-      <section className="max-w-xl mx-auto px-4 pb-20">
-        <p className="font-mono text-xs text-ink-grey uppercase tracking-widest text-center mb-6">
-          Sample Oath Receipt
-        </p>
+      {/* === SAMPLE RECEIPT === */}
+      <section className="max-w-xl mx-auto px-6 pb-24">
+        <p className="font-mono text-xs text-ash uppercase tracking-[0.3em] text-center mb-8">Sample Verdict Receipt</p>
         <motion.div
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.3 }}
-          className="glass rounded-xl overflow-hidden"
+          className="parchment-panel rounded overflow-hidden glow-gold"
         >
-          <div className="bg-court-slate/60 px-6 py-3 border-b border-glass-line flex items-center justify-between">
-            <span className="font-mono text-xs text-ink-grey uppercase tracking-widest">Demo Receipt</span>
-            <StatusRibbon status="fulfilled" size="sm" />
+          {/* Receipt header */}
+          <div className="bg-verdict-gold/10 border-b border-[var(--rule-line-strong)] px-6 py-3 flex items-center justify-between">
+            <span className="font-mono text-xs text-ash uppercase tracking-widest">Oath Receipt · Demo</span>
+            <span className="font-mono text-xs px-2 py-0.5 border border-verdict-green/40 text-verdict-green rounded uppercase tracking-widest">Fulfilled</span>
           </div>
-          <div className="p-6 space-y-4">
-            <div className="flex items-center gap-4">
-              <OathSeal status="fulfilled" size={72} animate={false} />
-              <div>
-                <h3 className="font-serif text-lg text-ivory-record">Public Beta Launch</h3>
-                <p className="font-mono text-xs text-ink-grey">{shortAddr(DEMO_OATHS[0].creator)}</p>
+          <div className="p-6 space-y-5">
+            <div>
+              <p className="font-mono text-xs text-ash mb-1 uppercase tracking-widest">Promise</p>
+              <p className="font-display text-xl text-parchment">Public Beta Launch</p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="border border-[var(--rule-line)] p-3 rounded">
+                <p className="font-mono text-xs text-ash mb-1">Confidence</p>
+                <p className="font-display text-2xl text-verdict-gold">{sampleVerdict.confidence}%</p>
+              </div>
+              <div className="border border-[var(--rule-line)] p-3 rounded">
+                <p className="font-mono text-xs text-ash mb-1">Alignment</p>
+                <p className="font-display text-2xl text-parchment capitalize">{sampleVerdict.source_alignment}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-court-slate/40 rounded-lg p-3">
-                <p className="font-mono text-xs text-ink-grey mb-0.5">Confidence</p>
-                <p className="font-mono font-medium text-verdict-green">{sampleVerdict.confidence}%</p>
-              </div>
-              <div className="bg-court-slate/40 rounded-lg p-3">
-                <p className="font-mono text-xs text-ink-grey mb-0.5">Alignment</p>
-                <p className="font-mono font-medium text-ivory-record capitalize">{sampleVerdict.source_alignment}</p>
-              </div>
+            <div className="border-l-2 border-verdict-gold/40 pl-4">
+              <p className="text-parchment-dim text-sm italic leading-relaxed">&ldquo;{sampleVerdict.short_reason}&rdquo;</p>
             </div>
-            <p className="text-sm text-ivory-record/80 italic border-l-2 border-verdict-green/40 pl-3">
-              &ldquo;{sampleVerdict.short_reason}&rdquo;
-            </p>
-            <p className="font-mono text-xs text-ink-grey">
+            <p className="font-mono text-xs text-ash">
               Resolved by {shortAddr(sampleVerdict.resolver)} · {formatIsoDate(sampleVerdict.resolved_at)}
             </p>
           </div>
         </motion.div>
       </section>
 
-      {/* Demo oaths */}
-      <section className="max-w-5xl mx-auto px-4 pb-24">
-        <p className="font-mono text-xs text-ink-grey uppercase tracking-widest text-center mb-6">
-          Example Oaths (Demo)
-        </p>
-        <div className="grid md:grid-cols-3 gap-4">
+      {/* === DEMO OATHS === */}
+      <section className="max-w-5xl mx-auto px-6 pb-28">
+        <p className="font-mono text-xs text-ash uppercase tracking-[0.3em] text-center mb-8">Example Oaths</p>
+        <div className="grid md:grid-cols-3 gap-px bg-[var(--rule-line)]">
           {DEMO_OATHS.map((o) => (
-            <div key={o.oath_id} className="glass rounded-xl p-5 space-y-3">
+            <div key={o.oath_id} className="court-paper p-5 space-y-3">
               <div className="flex items-start justify-between gap-2">
-                <h4 className="font-serif text-base text-ivory-record leading-tight">{o.title}</h4>
-                <StatusRibbon status={o.status} size="sm" />
+                <p className="font-display text-lg text-parchment leading-tight">{o.title}</p>
+                <span className="font-mono text-[10px] text-verdict-gold border border-verdict-gold/30 px-1.5 py-0.5 rounded uppercase shrink-0">{o.status}</span>
               </div>
-              <p className="text-xs text-ink-grey leading-relaxed line-clamp-3">{o.promise}</p>
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs text-ink-grey">{o.category}</span>
-                <span className="font-mono text-xs text-ink-grey">{formatDeadline(o.deadline_unix)}</span>
-              </div>
-              <div className="border-t border-glass-line pt-2">
-                <span className="font-mono text-xs text-partial-amber">Demo placeholder</span>
+              <p className="text-ash-light text-sm leading-relaxed line-clamp-3">{o.promise}</p>
+              <div className="flex items-center justify-between pt-2 border-t border-[var(--rule-line)]">
+                <span className="font-mono text-xs text-ash">{o.category}</span>
+                <span className="font-mono text-xs text-ash">{formatDeadline(o.deadline_unix)}</span>
               </div>
             </div>
           ))}
         </div>
       </section>
+
     </div>
   );
 }

@@ -5,10 +5,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, ArrowLeft, Loader2, CheckCircle } from "lucide-react";
+import { ArrowRight, ArrowLeft, Loader2, CheckCircle, Scale } from "lucide-react";
 import { useWallet } from "@/lib/context/WalletContext";
-import { createOath } from "@/lib/genlayer/client";
-import { getExplorerTxUrl } from "@/lib/genlayer/client";
+import { createOath, getExplorerTxUrl } from "@/lib/genlayer/client";
 import JudgeabilityMeter from "@/components/oath/JudgeabilityMeter";
 import ExplorerLink from "@/components/oath/ExplorerLink";
 import { useRouter } from "next/navigation";
@@ -32,7 +31,14 @@ const CATEGORIES = [
   "DAO Proposal", "Creator Delivery", "Agent Task", "Other"
 ];
 
-const STEPS = ["Promise", "Deadline", "Success Criteria", "Evidence Sources", "Exclusions", "Preview"];
+const STEPS = [
+  { label: "Promise",          sub: "Swear the oath" },
+  { label: "Deadline",         sub: "Set the deadline" },
+  { label: "Success Criteria", sub: "Define fulfillment" },
+  { label: "Evidence Sources", sub: "Allowable witnesses" },
+  { label: "Exclusions",       sub: "Void conditions" },
+  { label: "Review & Seal",    sub: "Commit to chain" },
+];
 
 export default function CreatePage() {
   const router = useRouter();
@@ -44,10 +50,7 @@ export default function CreatePage() {
   const hasContract = !!process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS;
 
   const {
-    register,
-    watch,
-    handleSubmit,
-    trigger,
+    register, watch, handleSubmit, trigger,
     formState: { errors },
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } = useForm<FormData>({ resolver: zodResolver(schema) as any });
@@ -69,25 +72,19 @@ export default function CreatePage() {
 
   const onSubmit = async (data: FormData) => {
     if (!isConnected) { connect(); return; }
-    if (!hasContract) { setError("Contract address not configured. Set NEXT_PUBLIC_OATH_CONTRACT_ADDRESS."); return; }
-    setLoading(true);
-    setError(null);
+    if (!hasContract) { setError("Contract address not configured."); return; }
+    setLoading(true); setError(null);
     try {
       const deadline_unix = Math.floor(new Date(data.deadline).getTime() / 1000);
-      const hash = await createOath(
-        {
-          title: data.title,
-          promise: data.promise,
-          deadline_unix,
-          success_criteria: data.success_criteria,
-          required_deliverables: data.required_deliverables || "",
-          accepted_sources: data.accepted_sources,
-          exclusions: data.exclusions || "",
-          stakeholder_notes: data.stakeholder_notes || "",
-          category: data.category,
-        },
-        account!
-      );
+      const hash = await createOath({
+        title: data.title, promise: data.promise, deadline_unix,
+        success_criteria: data.success_criteria,
+        required_deliverables: data.required_deliverables || "",
+        accepted_sources: data.accepted_sources,
+        exclusions: data.exclusions || "",
+        stakeholder_notes: data.stakeholder_notes || "",
+        category: data.category,
+      }, account!);
       setTxHash(hash);
       setTimeout(() => router.push("/oaths"), 3000);
     } catch (e: unknown) {
@@ -107,25 +104,35 @@ export default function CreatePage() {
   };
 
   return (
-    <div className="min-h-screen ledger-grid">
-      <div className="max-w-2xl mx-auto px-4 py-12">
-        {/* Step indicator */}
-        <div className="flex items-center gap-1 mb-10">
+    <div className="min-h-screen ledger-bg">
+      <div className="max-w-2xl mx-auto px-4 py-10">
+
+        {/* Chamber header */}
+        <div className="mb-8 flex items-center gap-3">
+          <Scale size={20} className="text-ash" />
+          <div>
+            <p className="font-mono text-[10px] text-ash uppercase tracking-[0.25em]">Promise Chamber</p>
+            <h1 className="font-display text-2xl text-parchment">Draft an Oath</h1>
+          </div>
+        </div>
+
+        {/* Step progress */}
+        <div className="flex items-center gap-1 mb-8">
           {STEPS.map((s, i) => (
-            <div key={s} className="flex items-center gap-1 flex-1">
+            <div key={s.label} className="flex items-center gap-1 flex-1">
               <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center font-mono text-xs transition-all ${
-                  i < step
-                    ? "bg-verdict-green text-oath-black"
-                    : i === step
-                    ? "bg-signal-cyan/20 border border-signal-cyan text-signal-cyan"
-                    : "bg-court-slate border border-glass-line text-ink-grey"
-                }`}
+                className="w-5 h-5 rounded-full flex items-center justify-center font-mono text-[10px] transition-all shrink-0"
+                style={{
+                  background: i < step ? "var(--verdict-green)" : i === step ? "var(--seal-red)" : "transparent",
+                  border: `1px solid ${i < step ? "var(--verdict-green)" : i === step ? "var(--seal-red)" : "var(--rule-line)"}`,
+                  color: i <= step ? "var(--parchment)" : "var(--ash)",
+                }}
               >
-                {i < step ? <CheckCircle size={12} /> : i + 1}
+                {i < step ? <CheckCircle size={10} /> : i + 1}
               </div>
               {i < STEPS.length - 1 && (
-                <div className={`h-px flex-1 ${i < step ? "bg-verdict-green/40" : "bg-glass-line"}`} />
+                <div className="h-px flex-1"
+                     style={{ background: i < step ? "var(--verdict-green)" : "var(--rule-line)" }} />
               )}
             </div>
           ))}
@@ -134,214 +141,200 @@ export default function CreatePage() {
         <AnimatePresence mode="wait">
           <motion.div
             key={step}
-            initial={{ opacity: 0, x: 20 }}
+            initial={{ opacity: 0, x: 16 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            transition={{ duration: 0.2 }}
+            exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.18 }}
           >
-            <p className="font-mono text-xs text-ink-grey uppercase tracking-widest mb-2">
-              Step {step + 1} of {STEPS.length}
-            </p>
-            <h2 className="font-serif text-3xl text-ivory-record mb-8">{STEPS[step]}</h2>
+            <div className="court-paper border border-[var(--rule-line)] rounded overflow-hidden mb-5">
+              {/* Step header */}
+              <div className="px-5 py-3 border-b border-[var(--rule-line)]"
+                   style={{ background: "var(--court-brown)" }}>
+                <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em]">
+                  Step {step + 1} of {STEPS.length} · {STEPS[step].sub}
+                </p>
+                <h2 className="font-display text-xl text-parchment mt-0.5">{STEPS[step].label}</h2>
+              </div>
 
-            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-            <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-6">
-              {step === 0 && (
-                <>
-                  <Field label="Title" error={errors.title?.message}>
-                    <input
-                      {...register("title")}
-                      placeholder="Public Beta Launch"
-                      className="input-base"
-                    />
-                  </Field>
-                  <Field label="Promise" error={errors.promise?.message}>
-                    <textarea
-                      {...register("promise")}
-                      rows={5}
-                      placeholder="Describe your commitment in plain English..."
-                      className="input-base resize-none"
-                    />
-                  </Field>
-                  <Field label="Category" error={errors.category?.message}>
-                    <select {...register("category")} className="input-base">
-                      <option value="">Select category</option>
-                      {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </Field>
-                </>
-              )}
+              {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+              <form onSubmit={handleSubmit(onSubmit as any)} className="p-5 space-y-5">
 
-              {step === 1 && (
-                <Field label="Deadline" error={errors.deadline?.message}>
-                  <input
-                    {...register("deadline")}
-                    type="datetime-local"
-                    className="input-base"
-                  />
-                </Field>
-              )}
+                {step === 0 && (
+                  <>
+                    <Field label="Oath Title" error={errors.title?.message}>
+                      <input {...register("title")} placeholder="e.g. Public Beta Launch by Q3" className="court-input" />
+                    </Field>
+                    <Field label="Sworn Promise" error={errors.promise?.message}>
+                      <textarea {...register("promise")} rows={5}
+                        placeholder="State your commitment in clear, plain language. Be specific enough for an AI to verify it."
+                        className="court-input resize-none" />
+                    </Field>
+                    <Field label="Category" error={errors.category?.message}>
+                      <select {...register("category")} className="court-input">
+                        <option value="">Select a category</option>
+                        {CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </Field>
+                  </>
+                )}
 
-              {step === 2 && (
-                <>
-                  <Field label="Success Criteria" error={errors.success_criteria?.message}>
-                    <textarea
-                      {...register("success_criteria")}
-                      rows={4}
-                      placeholder="What does fulfilment look like? Be specific and measurable."
-                      className="input-base resize-none"
-                    />
+                {step === 1 && (
+                  <Field label="Deadline" error={errors.deadline?.message}>
+                    <input {...register("deadline")} type="datetime-local" className="court-input" />
+                    <p className="font-mono text-[10px] text-ash mt-1.5">
+                      Evidence may be submitted after this date. Judgment can be requested any time.
+                    </p>
                   </Field>
-                  <Field label="Required Deliverables (optional)" error={errors.required_deliverables?.message}>
-                    <input
-                      {...register("required_deliverables")}
-                      placeholder="e.g. GitHub repo, deployed URL, report"
-                      className="input-base"
-                    />
-                  </Field>
-                </>
-              )}
+                )}
 
-              {step === 3 && (
-                <Field label="Accepted Public Evidence Sources" error={errors.accepted_sources?.message}>
-                  <textarea
-                    {...register("accepted_sources")}
-                    rows={3}
-                    placeholder="e.g. Official website, GitHub release, public announcement post"
-                    className="input-base resize-none"
-                  />
-                  <p className="font-mono text-xs text-ink-grey mt-2">
-                    List public URL sources that validators may use to verify the promise.
-                  </p>
-                </Field>
-              )}
+                {step === 2 && (
+                  <>
+                    <Field label="Success Criteria" error={errors.success_criteria?.message}>
+                      <textarea {...register("success_criteria")} rows={4}
+                        placeholder="What specific, verifiable outcome constitutes fulfillment?"
+                        className="court-input resize-none" />
+                    </Field>
+                    <Field label="Required Deliverables (optional)" error={errors.required_deliverables?.message}>
+                      <input {...register("required_deliverables")}
+                        placeholder="e.g. GitHub repo, deployed URL, published report"
+                        className="court-input" />
+                    </Field>
+                  </>
+                )}
 
-              {step === 4 && (
-                <>
-                  <Field label="Exclusions (optional)" error={errors.exclusions?.message}>
-                    <textarea
-                      {...register("exclusions")}
-                      rows={3}
-                      placeholder="e.g. Force majeure, scheduled third-party outage over 24 hours"
-                      className="input-base resize-none"
-                    />
+                {step === 3 && (
+                  <Field label="Accepted Public Evidence Sources" error={errors.accepted_sources?.message}>
+                    <textarea {...register("accepted_sources")} rows={3}
+                      placeholder="e.g. Official website, GitHub release page, public announcement post"
+                      className="court-input resize-none" />
+                    <p className="font-mono text-[10px] text-ash mt-1.5">
+                      List public sources GenLayer validators may consult when judging this oath.
+                    </p>
                   </Field>
-                  <Field label="Stakeholder Notes (optional)" error={errors.stakeholder_notes?.message}>
-                    <input
-                      {...register("stakeholder_notes")}
-                      placeholder="Any additional context for watchers"
-                      className="input-base"
-                    />
-                  </Field>
-                </>
-              )}
+                )}
 
-              {step === 5 && (
-                <div className="space-y-4">
-                  <div className="glass rounded-xl p-5 space-y-3">
-                    <h3 className="font-serif text-lg text-ivory-record">{watched.title || "—"}</h3>
-                    <p className="text-sm text-ivory-record/80 leading-relaxed">{watched.promise || "—"}</p>
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div>
-                        <p className="font-mono text-xs text-ink-grey">Deadline</p>
-                        <p className="text-ivory-record">{watched.deadline || "—"}</p>
+                {step === 4 && (
+                  <>
+                    <Field label="Exclusions (optional)" error={errors.exclusions?.message}>
+                      <textarea {...register("exclusions")} rows={3}
+                        placeholder="e.g. Force majeure, scheduled outage over 48 hours, regulatory block"
+                        className="court-input resize-none" />
+                    </Field>
+                    <Field label="Stakeholder Notes (optional)" error={errors.stakeholder_notes?.message}>
+                      <input {...register("stakeholder_notes")}
+                        placeholder="Additional context for watchers and witnesses"
+                        className="court-input" />
+                    </Field>
+                  </>
+                )}
+
+                {step === 5 && (
+                  <div className="space-y-5">
+                    {/* Preview */}
+                    <div className="space-y-3 border border-[var(--rule-line)] rounded divide-y divide-[var(--rule-line)]">
+                      <div className="p-4">
+                        <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1">Oath Title</p>
+                        <p className="font-display text-lg text-parchment">{watched.title || "—"}</p>
                       </div>
-                      <div>
-                        <p className="font-mono text-xs text-ink-grey">Category</p>
-                        <p className="text-ivory-record">{watched.category || "—"}</p>
+                      <div className="p-4">
+                        <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1.5">Sworn Promise</p>
+                        <p className="text-sm text-parchment-dim leading-relaxed">{watched.promise || "—"}</p>
                       </div>
+                      <div className="grid grid-cols-2 divide-x divide-[var(--rule-line)]">
+                        <div className="p-4">
+                          <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1">Deadline</p>
+                          <p className="font-mono text-xs text-parchment-dim">{watched.deadline || "—"}</p>
+                        </div>
+                        <div className="p-4">
+                          <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1">Category</p>
+                          <p className="font-mono text-xs text-parchment-dim">{watched.category || "—"}</p>
+                        </div>
+                      </div>
+                      <div className="p-4">
+                        <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1">Success Criteria</p>
+                        <p className="text-sm text-parchment-dim">{watched.success_criteria || "—"}</p>
+                      </div>
+                      <div className="p-4">
+                        <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1">Accepted Sources</p>
+                        <p className="text-sm text-parchment-dim">{watched.accepted_sources || "—"}</p>
+                      </div>
+                      {watched.exclusions && (
+                        <div className="p-4">
+                          <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1">Exclusions</p>
+                          <p className="text-sm text-parchment-dim">{watched.exclusions}</p>
+                        </div>
+                      )}
                     </div>
-                    <div>
-                      <p className="font-mono text-xs text-ink-grey mb-1">Success Criteria</p>
-                      <p className="text-sm text-ivory-record/80">{watched.success_criteria || "—"}</p>
-                    </div>
-                    <div>
-                      <p className="font-mono text-xs text-ink-grey mb-1">Accepted Sources</p>
-                      <p className="text-sm text-ivory-record/80">{watched.accepted_sources || "—"}</p>
-                    </div>
-                    {watched.exclusions && (
-                      <div>
-                        <p className="font-mono text-xs text-ink-grey mb-1">Exclusions</p>
-                        <p className="text-sm text-ivory-record/80">{watched.exclusions}</p>
+
+                    <JudgeabilityMeter data={judgeData} />
+
+                    {!hasContract && (
+                      <div className="border border-verdict-gold/30 bg-verdict-gold/5 rounded p-3">
+                        <p className="font-mono text-[10px] text-verdict-gold">
+                          No contract address configured. Set NEXT_PUBLIC_OATH_CONTRACT_ADDRESS to submit on-chain.
+                        </p>
                       </div>
                     )}
+
+                    {error && <p className="font-mono text-xs text-breach-red">{error}</p>}
+                    {txHash && (
+                      <div className="border border-verdict-gold/30 bg-verdict-gold/5 rounded p-3 space-y-1.5">
+                        <p className="font-mono text-xs text-verdict-gold">Oath sealed on-chain.</p>
+                        <ExplorerLink href={getExplorerTxUrl(txHash)} label="View on chain →" />
+                      </div>
+                    )}
+
+                    <button
+                      type="submit"
+                      disabled={loading || !!txHash}
+                      className="w-full py-3 border border-seal-red/50 text-seal-red-bright hover:bg-seal-red/10 transition-all font-mono text-xs uppercase tracking-wider rounded flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      {loading && <Loader2 size={13} className="animate-spin" />}
+                      {!isConnected ? "Connect Wallet to Seal" : txHash ? "Oath Sealed" : "Seal Oath on StudioNet"}
+                    </button>
                   </div>
-
-                  <JudgeabilityMeter data={judgeData} />
-
-                  {!hasContract && (
-                    <div className="border border-partial-amber/40 bg-partial-amber/10 rounded-lg p-3">
-                      <p className="font-mono text-xs text-partial-amber">
-                        No contract address set. Deploy the contract and set NEXT_PUBLIC_OATH_CONTRACT_ADDRESS to submit oaths on-chain.
-                      </p>
-                    </div>
-                  )}
-
-                  {error && <p className="font-mono text-xs text-breach-red">{error}</p>}
-                  {txHash && (
-                    <div className="border border-verdict-green/30 bg-verdict-green/10 rounded-lg p-3 space-y-1">
-                      <p className="font-mono text-xs text-verdict-green">Oath created on-chain!</p>
-                      <ExplorerLink href={getExplorerTxUrl(txHash)} label="View transaction" />
-                    </div>
-                  )}
-
-                  <button
-                    type="submit"
-                    disabled={loading || !!txHash}
-                    className="w-full py-3 rounded-lg bg-witness-gold/10 border border-witness-gold/40 text-witness-gold hover:bg-witness-gold/20 transition-all font-mono text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {loading ? <Loader2 size={14} className="animate-spin" /> : null}
-                    {!isConnected ? "Connect Wallet to Create" : txHash ? "Oath Created" : "Create Oath on StudioNet"}
-                  </button>
-                </div>
-              )}
-            </form>
+                )}
+              </form>
+            </div>
           </motion.div>
         </AnimatePresence>
 
-        {/* Nav buttons */}
+        {/* Navigation */}
         {step < 5 && (
-          <div className="flex justify-between mt-8">
+          <div className="flex justify-between">
             <button
               onClick={() => setStep((s) => Math.max(s - 1, 0))}
               disabled={step === 0}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg border border-glass-line text-ink-grey hover:text-ivory-record transition-all font-mono text-sm disabled:opacity-30"
+              className="flex items-center gap-2 px-4 py-2 border border-[var(--rule-line)] text-ash hover:text-parchment-dim hover:border-[var(--rule-line-strong)] transition-all font-mono text-xs rounded uppercase tracking-wider disabled:opacity-30"
             >
-              <ArrowLeft size={14} /> Back
+              <ArrowLeft size={13} /> Back
             </button>
             <button
               onClick={next}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-signal-cyan/10 border border-signal-cyan/40 text-signal-cyan hover:bg-signal-cyan/20 transition-all font-mono text-sm"
+              className="flex items-center gap-2 px-4 py-2 border border-witness-blue/50 text-[#4A9EDB] hover:bg-witness-blue/10 transition-all font-mono text-xs rounded uppercase tracking-wider"
             >
-              Next <ArrowRight size={14} />
+              Next <ArrowRight size={13} />
             </button>
           </div>
         )}
       </div>
 
       <style jsx global>{`
-        .input-base {
+        .court-input {
           width: 100%;
-          background: rgba(17, 24, 39, 0.7);
-          border: 1px solid rgba(255,255,255,0.12);
-          border-radius: 0.5rem;
-          padding: 0.625rem 0.875rem;
-          color: #F8F3E7;
+          background: transparent;
+          border: 1px solid var(--rule-line);
+          border-radius: 4px;
+          padding: 0.5rem 0.75rem;
+          color: var(--parchment-dim);
           font-family: "IBM Plex Mono", monospace;
-          font-size: 0.875rem;
+          font-size: 0.75rem;
           outline: none;
           transition: border-color 0.15s;
         }
-        .input-base:focus {
-          border-color: rgba(40, 215, 255, 0.5);
-        }
-        .input-base::placeholder {
-          color: rgba(138, 147, 165, 0.5);
-        }
-        .input-base option {
-          background: #111827;
-          color: #F8F3E7;
-        }
+        .court-input:focus { border-color: var(--rule-line-strong); }
+        .court-input::placeholder { color: var(--ash); opacity: 0.6; }
+        .court-input option { background: #1A0F07; color: var(--parchment-dim); }
       `}</style>
     </div>
   );
@@ -350,9 +343,9 @@ export default function CreatePage() {
 function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1.5">
-      <label className="font-mono text-xs text-ink-grey uppercase tracking-widest">{label}</label>
+      <label className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] block">{label}</label>
       {children}
-      {error && <p className="font-mono text-xs text-breach-red">{error}</p>}
+      {error && <p className="font-mono text-[10px] text-breach-red mt-0.5">{error}</p>}
     </div>
   );
 }

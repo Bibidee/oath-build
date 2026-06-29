@@ -5,15 +5,20 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { getAllOathSummaries } from "@/lib/genlayer/client";
-import StatusRibbon from "@/components/oath/StatusRibbon";
 import { formatDeadline, isPastDeadline, shortAddr, DEMO_OATHS } from "@/lib/utils";
 
 const TABS = [
-  { key: "evidence_needed", label: "Evidence Needed" },
-  { key: "ready_for_verdict", label: "Ready for Verdict" },
-  { key: "in_dispute", label: "In Dispute" },
+  { key: "evidence_needed",  label: "Awaiting Witnesses" },
+  { key: "ready_for_verdict", label: "Ready for Judgment" },
+  { key: "in_dispute",       label: "Under Appeal" },
   { key: "recently_settled", label: "Recently Settled" },
 ];
+
+const STATUS_COLOR: Record<string, string> = {
+  active: "text-[#4A9EDB]", fulfilled: "text-verdict-green",
+  partial: "text-verdict-gold", missed: "text-breach-red",
+  needs_more_evidence: "text-verdict-gold",
+};
 
 export default function ArenaPage() {
   const hasContract = !!process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS;
@@ -26,100 +31,94 @@ export default function ArenaPage() {
   });
 
   const demoOaths = DEMO_OATHS.map((o) => ({
-    oath_id: o.oath_id,
-    title: o.title,
-    creator: o.creator,
-    deadline_unix: o.deadline_unix,
-    status: o.status,
-    settled: o.settled,
-    category: o.category,
-    evidence_count: 0,
-    appeal_count: 0,
-    verdict_status: "",
-    verdict_confidence: 0,
+    oath_id: o.oath_id, title: o.title, creator: o.creator,
+    deadline_unix: o.deadline_unix, status: o.status, settled: o.settled,
+    category: o.category, evidence_count: 0, appeal_count: 0,
+    verdict_status: "", verdict_confidence: 0,
   }));
 
   const source = hasContract ? oaths : demoOaths;
 
   const tabData: Record<string, typeof source> = {
-    evidence_needed: source.filter(
-      (o) => !o.settled && isPastDeadline(o.deadline_unix) && o.evidence_count === 0
-    ),
-    ready_for_verdict: source.filter(
-      (o) => !o.settled && isPastDeadline(o.deadline_unix) && o.evidence_count > 0
-    ),
-    in_dispute: source.filter((o) => o.appeal_count > 0 && !o.settled),
-    recently_settled: source.filter((o) => o.settled).slice(0, 20),
+    evidence_needed:   source.filter((o) => !o.settled && isPastDeadline(o.deadline_unix) && o.evidence_count === 0),
+    ready_for_verdict: source.filter((o) => !o.settled && isPastDeadline(o.deadline_unix) && o.evidence_count > 0),
+    in_dispute:        source.filter((o) => o.appeal_count > 0 && !o.settled),
+    recently_settled:  source.filter((o) => o.settled).slice(0, 20),
   };
 
   const items = tabData[tab] || [];
 
+  const emptyMsg: Record<string, string> = {
+    evidence_needed: "No oaths are waiting for witnesses right now.",
+    ready_for_verdict: "No oaths are ready for judgment yet.",
+    in_dispute: "No oaths are currently under appeal.",
+    recently_settled: "No settled oaths yet. Create one and request a verdict.",
+  };
+
   return (
-    <div className="min-h-screen ledger-grid">
-      <div className="max-w-4xl mx-auto px-4 py-12">
-        <div className="mb-10">
-          <p className="font-mono text-xs text-ink-grey uppercase tracking-widest mb-2">Oath Arena</p>
-          <h1 className="font-serif text-4xl text-ivory-record">Oaths Needing Action</h1>
-          {!hasContract && (
-            <p className="font-mono text-xs text-partial-amber mt-2">Demo mode</p>
-          )}
+    <div className="min-h-screen ledger-bg">
+      <div className="max-w-4xl mx-auto px-6 py-12">
+
+        {/* Header */}
+        <div className="mb-10 border-b border-[var(--rule-line)] pb-6">
+          <p className="font-mono text-xs text-ash uppercase tracking-[0.3em] mb-2">Action Required</p>
+          <h1 className="font-display text-5xl text-parchment">Judgment Arena</h1>
+          {!hasContract && <p className="font-mono text-xs text-verdict-gold mt-2">Demo mode</p>}
         </div>
 
-        <div className="flex gap-2 flex-wrap mb-8">
+        {/* Tabs */}
+        <div className="flex gap-0 mb-8 border border-[var(--rule-line)] rounded overflow-hidden">
           {TABS.map((t) => (
             <button
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`px-4 py-2 rounded-lg font-mono text-sm transition-all border ${
+              className={`flex-1 px-4 py-2.5 font-mono text-xs uppercase tracking-wider transition-colors border-r border-[var(--rule-line)] last:border-r-0 ${
                 tab === t.key
-                  ? "bg-signal-cyan/10 border-signal-cyan/40 text-signal-cyan"
-                  : "border-glass-line text-ink-grey hover:text-ivory-record hover:border-ivory-record/30"
+                  ? "bg-seal-red/10 text-seal-red-bright"
+                  : "text-ash hover:text-parchment-dim hover:bg-court-brown-mid"
               }`}
             >
               {t.label}
-              <span className="ml-2 opacity-60">
-                {tabData[t.key]?.length ?? 0}
-              </span>
+              <span className="ml-2 text-ash opacity-60">{tabData[t.key]?.length ?? 0}</span>
             </button>
           ))}
         </div>
 
         {isLoading ? (
-          <div className="text-center py-20 font-mono text-ink-grey">Loading from chain…</div>
+          <div className="text-center py-24 font-mono text-ash">Consulting the record…</div>
         ) : items.length === 0 ? (
-          <div className="text-center py-20 font-mono text-ink-grey">
-            Nothing here yet.
-            {tab === "evidence_needed" && " Oaths past their deadline with no evidence will appear here."}
-            {tab === "ready_for_verdict" && " Oaths with evidence ready for GenLayer judgment will appear here."}
-          </div>
+          <div className="text-center py-24 font-mono text-ash">{emptyMsg[tab]}</div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-px">
             {items.map((o, i) => (
               <motion.div
                 key={o.oath_id}
-                initial={{ opacity: 0, y: 10 }}
+                initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: i * 0.04 }}
               >
                 <Link
                   href={o.oath_id < 0 ? "#" : `/oaths/${o.oath_id}`}
-                  className="block glass rounded-xl p-5 hover:border-signal-cyan/30 transition-all group"
+                  className="group flex items-center gap-5 px-5 py-4 border-b border-[var(--rule-line)] hover:bg-court-brown-mid transition-colors"
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-serif text-lg text-ivory-record group-hover:text-signal-cyan transition-colors">
-                        {o.title}
-                      </h3>
-                      <p className="font-mono text-xs text-ink-grey mt-1">
-                        {shortAddr(o.creator)} · deadline {formatDeadline(o.deadline_unix)}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end gap-2 shrink-0">
-                      <StatusRibbon status={o.status} size="sm" />
-                      <span className="font-mono text-xs text-ink-grey">
-                        {o.evidence_count} evidence
-                      </span>
-                    </div>
+                  <span className="font-mono text-xs text-ash w-8 shrink-0">
+                    {o.oath_id >= 0 ? `#${o.oath_id}` : "—"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-display text-lg text-parchment group-hover:text-verdict-gold-light transition-colors leading-tight">
+                      {o.title}
+                    </p>
+                    <p className="font-mono text-xs text-ash mt-0.5">
+                      {shortAddr(o.creator)} · deadline {formatDeadline(o.deadline_unix)}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`font-mono text-xs uppercase tracking-widest ${STATUS_COLOR[o.status] || "text-ash"}`}>
+                      {o.status.replace(/_/g, " ")}
+                    </p>
+                    {o.evidence_count > 0 && (
+                      <p className="font-mono text-xs text-ash mt-0.5">{o.evidence_count} witness{o.evidence_count !== 1 ? "es" : ""}</p>
+                    )}
                   </div>
                 </Link>
               </motion.div>

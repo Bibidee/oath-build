@@ -18,18 +18,22 @@ interface Props {
 export default function VerdictReceipt({ verdict, oath, txHash }: Props) {
   const [copied, setCopied] = useState(false);
 
-  const receiptText = `OATH RECEIPT
-────────────────────────────────────
-Oath #${oath.oath_id}: ${oath.title}
-Status: ${verdict.status.toUpperCase()}
-Confidence: ${verdict.confidence}%
+  const receiptText = `THE LEDGER COURT — VERDICT RECEIPT
+════════════════════════════════════════
+Oath #${oath.oath_id}
+"${oath.title}"
+════════════════════════════════════════
+Verdict:          ${verdict.status.toUpperCase()}
+Confidence:       ${verdict.confidence}%
 Source Alignment: ${verdict.source_alignment}
-Winning Side: ${verdict.winning_side}
+Winning Side:     ${verdict.winning_side}
+
 Reason: ${verdict.short_reason}
-Resolved: ${formatIsoDate(verdict.resolved_at)}
-Resolver: ${shortAddr(verdict.resolver)}
-────────────────────────────────────
-Powered by GenLayer · StudioNet`;
+
+Resolved:  ${formatIsoDate(verdict.resolved_at)}
+Resolver:  ${shortAddr(verdict.resolver)}
+════════════════════════════════════════
+GenLayer · StudioNet`;
 
   const copy = async () => {
     await navigator.clipboard.writeText(receiptText);
@@ -38,82 +42,80 @@ Powered by GenLayer · StudioNet`;
   };
 
   const confidenceColor =
-    verdict.confidence >= 80
-      ? "#19C37D"
-      : verdict.confidence >= 60
-      ? "#D6A84F"
-      : "#EF4444";
+    verdict.confidence >= 80 ? "var(--verdict-green)"
+    : verdict.confidence >= 60 ? "var(--verdict-gold)"
+    : "var(--breach-red)";
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
-      className="glass rounded-xl overflow-hidden"
+      className="border border-verdict-gold/30 rounded overflow-hidden"
+      style={{ background: "color-mix(in srgb, var(--verdict-gold) 4%, var(--court-brown))" }}
     >
-      {/* Header band */}
-      <div className="bg-court-slate/60 px-6 py-3 flex items-center justify-between border-b border-glass-line">
-        <span className="font-mono text-xs text-ink-grey uppercase tracking-widest">
-          Oath Receipt · #{oath.oath_id}
-        </span>
-        <button onClick={copy} className="flex items-center gap-1.5 text-ink-grey hover:text-ivory-record transition-colors">
-          {copied ? <CheckCircle size={14} className="text-verdict-green" /> : <Copy size={14} />}
-          <span className="font-mono text-xs">{copied ? "Copied" : "Copy"}</span>
+      {/* Receipt header band */}
+      <div className="px-5 py-3 flex items-center justify-between border-b border-verdict-gold/20"
+           style={{ background: "color-mix(in srgb, var(--verdict-gold) 8%, var(--ink))" }}>
+        <div>
+          <span className="font-mono text-[10px] text-ash uppercase tracking-[0.25em]">
+            Verdict Receipt
+          </span>
+          <span className="font-mono text-[10px] text-verdict-gold ml-2">· #{oath.oath_id}</span>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 text-ash hover:text-verdict-gold transition-colors">
+          {copied ? <CheckCircle size={13} className="text-verdict-gold" /> : <Copy size={13} />}
+          <span className="font-mono text-[10px] uppercase tracking-wider">{copied ? "Copied" : "Copy"}</span>
         </button>
       </div>
 
-      <div className="p-6 space-y-6">
-        {/* Seal + Title */}
-        <div className="flex items-center gap-6">
-          <OathSeal status={verdict.status} size={80} />
-          <div className="flex-1 min-w-0">
-            <h3 className="font-serif text-xl text-ivory-record leading-tight">{oath.title}</h3>
-            <p className="font-mono text-xs text-ink-grey mt-1">
-              Created by {shortAddr(oath.creator)}
+      <div className="p-5 space-y-5">
+        {/* Seal + title */}
+        <div className="flex items-start gap-5">
+          <OathSeal status={verdict.status} size={72} animate={false} />
+          <div className="flex-1 min-w-0 pt-1">
+            <h3 className="font-display text-lg text-parchment leading-snug">{oath.title}</h3>
+            <p className="font-mono text-xs text-ash mt-1">
+              Sworn by {shortAddr(oath.creator)}
             </p>
           </div>
         </div>
 
-        {/* Verdict grid */}
-        <div className="grid grid-cols-2 gap-3">
-          <div className="bg-court-slate/40 rounded-lg p-3">
-            <p className="font-mono text-xs text-ink-grey mb-1">Confidence</p>
-            <p className="font-mono text-lg font-medium" style={{ color: confidenceColor }}>
+        {/* Verdict fields — ledger rows */}
+        <div className="border border-[var(--rule-line)] rounded divide-y divide-[var(--rule-line)]">
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="font-mono text-xs text-ash uppercase tracking-wider">Confidence</span>
+            <span className="font-mono text-sm font-semibold" style={{ color: confidenceColor }}>
               {verdict.confidence}%
-            </p>
+            </span>
           </div>
-          <div className="bg-court-slate/40 rounded-lg p-3">
-            <p className="font-mono text-xs text-ink-grey mb-1">Source Alignment</p>
-            <p className="font-mono text-lg font-medium text-ivory-record capitalize">
-              {verdict.source_alignment}
-            </p>
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="font-mono text-xs text-ash uppercase tracking-wider">Source Alignment</span>
+            <span className="font-mono text-xs text-parchment-dim capitalize">{verdict.source_alignment}</span>
           </div>
-          <div className="bg-court-slate/40 rounded-lg p-3">
-            <p className="font-mono text-xs text-ink-grey mb-1">Winning Side</p>
-            <p className="font-mono text-lg font-medium text-ivory-record capitalize">
-              {verdict.winning_side}
-            </p>
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="font-mono text-xs text-ash uppercase tracking-wider">Winning Side</span>
+            <span className="font-mono text-xs text-parchment-dim capitalize">{verdict.winning_side}</span>
           </div>
-          <div className="bg-court-slate/40 rounded-lg p-3">
-            <p className="font-mono text-xs text-ink-grey mb-1">Resolved</p>
-            <p className="font-mono text-sm font-medium text-ivory-record">
-              {formatIsoDate(verdict.resolved_at)}
-            </p>
+          <div className="flex items-center justify-between px-4 py-2.5">
+            <span className="font-mono text-xs text-ash uppercase tracking-wider">Resolved</span>
+            <span className="font-mono text-xs text-parchment-dim">{formatIsoDate(verdict.resolved_at)}</span>
           </div>
         </div>
 
-        {/* Reason */}
-        <div className="border border-glass-line rounded-lg p-4">
-          <p className="font-mono text-xs text-ink-grey mb-2 uppercase tracking-widest">Verdict Reason</p>
-          <p className="text-ivory-record text-sm leading-relaxed">{verdict.short_reason}</p>
+        {/* Reason block */}
+        <div className="border-l-2 pl-4 py-1"
+             style={{ borderColor: "var(--verdict-gold)" }}>
+          <p className="font-mono text-[10px] text-ash uppercase tracking-[0.2em] mb-1.5">Verdict Reason</p>
+          <p className="text-parchment-dim text-sm leading-relaxed">{verdict.short_reason}</p>
         </div>
 
-        {/* Explorer */}
-        <div className="flex items-center justify-between pt-2 border-t border-glass-line">
-          <span className="font-mono text-xs text-ink-grey">
+        {/* Footer */}
+        <div className="flex items-center justify-between pt-3 border-t border-[var(--rule-line)]">
+          <span className="font-mono text-xs text-ash">
             Resolver: {shortAddr(verdict.resolver)}
           </span>
           {txHash && (
-            <ExplorerLink href={getExplorerTxUrl(txHash)} label="View Transaction" />
+            <ExplorerLink href={getExplorerTxUrl(txHash)} label="Chain Receipt →" />
           )}
         </div>
       </div>

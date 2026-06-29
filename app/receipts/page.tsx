@@ -3,20 +3,23 @@
 import { motion } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import { getAllOathSummaries, getVerdict, getOath } from "@/lib/genlayer/client";
-import OathSeal from "@/components/oath/OathSeal";
-import StatusRibbon from "@/components/oath/StatusRibbon";
-import ExplorerLink from "@/components/oath/ExplorerLink";
 import { getExplorerContractUrl } from "@/lib/genlayer/client";
-import { formatDeadline, formatIsoDate, shortAddr } from "@/lib/utils";
+import { formatIsoDate, shortAddr } from "@/lib/utils";
+import ExplorerLink from "@/components/oath/ExplorerLink";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { VerdictReceipt } from "@/lib/genlayer/types";
-import type { Oath } from "@/lib/genlayer/types";
+import type { VerdictReceipt, Oath } from "@/lib/genlayer/types";
 
-interface SettledOath {
-  oath: Oath;
-  verdict: VerdictReceipt;
-}
+interface SettledOath { oath: Oath; verdict: VerdictReceipt; }
+
+const VERDICT_STYLE: Record<string, { color: string; label: string }> = {
+  fulfilled:   { color: "var(--verdict-green)",      label: "Fulfilled" },
+  partial:     { color: "var(--verdict-gold)",        label: "Partial" },
+  missed:      { color: "var(--breach-red)",          label: "Missed" },
+  unverifiable:{ color: "var(--ash)",                 label: "Unverifiable" },
+  excluded:    { color: "var(--ash)",                 label: "Excluded" },
+  invalid_oath:{ color: "var(--ash)",                 label: "Invalid" },
+};
 
 export default function ReceiptsPage() {
   const hasContract = !!process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS;
@@ -48,21 +51,15 @@ export default function ReceiptsPage() {
     });
   }, [summaries]);
 
-  // Demo receipt
-  const demoReceipt = {
+  const demoReceipt: SettledOath = {
     oath: {
-      oath_id: -1,
-      title: "Public Beta Launch",
+      oath_id: -1, title: "Public Beta Launch",
       creator: "0xdemo000000000000000000000000000000000001",
-      status: "fulfilled" as const,
-      settled: true,
+      status: "fulfilled" as const, settled: true,
     } as Oath,
     verdict: {
-      oath_id: -1,
-      status: "fulfilled" as const,
-      confidence: 86,
-      source_alignment: "strong" as const,
-      winning_side: "fulfilment" as const,
+      oath_id: -1, status: "fulfilled" as const, confidence: 86,
+      source_alignment: "strong" as const, winning_side: "fulfilment" as const,
       short_reason: "Public sources confirm beta shipped before deadline with required features.",
       canonical_json: "",
       resolved_at: new Date(Date.now() - 86400000).toISOString(),
@@ -73,73 +70,102 @@ export default function ReceiptsPage() {
   const displayReceipts = hasContract ? receipts : [demoReceipt];
 
   return (
-    <div className="min-h-screen ledger-grid">
-      <div className="max-w-5xl mx-auto px-4 py-12">
-        <div className="mb-10 flex items-end justify-between">
+    <div className="min-h-screen ledger-bg">
+      <div className="max-w-4xl mx-auto px-6 py-12">
+
+        {/* Header */}
+        <div className="mb-10 border-b border-[var(--rule-line)] pb-6 flex items-end justify-between">
           <div>
-            <p className="font-mono text-xs text-ink-grey uppercase tracking-widest mb-2">Settlement Gallery</p>
-            <h1 className="font-serif text-4xl text-ivory-record">Oath Receipts</h1>
-            {!hasContract && (
-              <p className="font-mono text-xs text-partial-amber mt-2">Demo mode</p>
-            )}
+            <p className="font-mono text-xs text-ash uppercase tracking-[0.3em] mb-2">Settlement Archive</p>
+            <h1 className="font-display text-5xl text-parchment">Verdict Receipts</h1>
+            {!hasContract && <p className="font-mono text-xs text-verdict-gold mt-2">Demo mode</p>}
           </div>
-          {hasContract && (
-            <ExplorerLink href={getExplorerContractUrl()} label="StudioNet Contract" />
-          )}
+          {hasContract && <ExplorerLink href={getExplorerContractUrl()} label="View contract" />}
         </div>
 
         {loading ? (
-          <div className="text-center py-20 font-mono text-ink-grey">Loading receipts…</div>
+          <div className="text-center py-24 font-mono text-ash">Retrieving court records…</div>
         ) : displayReceipts.length === 0 ? (
-          <div className="text-center py-20 font-mono text-ink-grey">
-            No settled oaths yet. Create one and request a verdict.
+          <div className="text-center py-24 font-mono text-ash">
+            The archive is empty. Create an oath and request a verdict.
           </div>
         ) : (
           <div className="grid md:grid-cols-2 gap-4">
-            {displayReceipts.map((r, i) => (
-              <motion.div
-                key={r.oath.oath_id}
-                initial={{ opacity: 0, scale: 0.97 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: i * 0.05 }}
-              >
-                <Link
-                  href={r.oath.oath_id < 0 ? "#" : `/oaths/${r.oath.oath_id}`}
-                  className="block glass rounded-xl overflow-hidden hover:border-signal-cyan/30 transition-all group"
+            {displayReceipts.map((r, i) => {
+              const vs = VERDICT_STYLE[r.verdict.status] || { color: "var(--ash)", label: r.verdict.status };
+              return (
+                <motion.div
+                  key={r.oath.oath_id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.06 }}
                 >
-                  <div className="bg-court-slate/60 px-5 py-3 border-b border-glass-line flex items-center justify-between">
-                    <span className="font-mono text-xs text-ink-grey">
-                      {r.oath.oath_id < 0 ? "Demo" : `Oath #${r.oath.oath_id}`}
-                    </span>
-                    <StatusRibbon status={r.verdict.status} size="sm" />
-                  </div>
-                  <div className="p-5 space-y-4">
-                    <div className="flex items-center gap-4">
-                      <OathSeal status={r.verdict.status} size={56} animate={false} />
+                  <Link
+                    href={r.oath.oath_id < 0 ? "#" : `/oaths/${r.oath.oath_id}`}
+                    className="block parchment-panel rounded overflow-hidden hover:border-verdict-gold/30 transition-colors group"
+                  >
+                    {/* Receipt top */}
+                    <div className="px-5 py-3 border-b border-[var(--rule-line)] flex items-center justify-between"
+                         style={{ background: `${vs.color}10` }}>
+                      <span className="font-mono text-xs text-ash">
+                        {r.oath.oath_id < 0 ? "Demo" : `Oath #${r.oath.oath_id}`}
+                      </span>
+                      <span className="font-mono text-xs uppercase tracking-widest px-2 py-0.5 border rounded"
+                            style={{ color: vs.color, borderColor: `${vs.color}40` }}>
+                        {vs.label}
+                      </span>
+                    </div>
+
+                    {/* Seal + title */}
+                    <div className="px-5 pt-5 pb-4 flex items-start gap-4">
+                      {/* Stamped seal */}
+                      <div className="shrink-0 mt-1">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                          <circle cx="24" cy="24" r="22" stroke={vs.color} strokeWidth="1.5" opacity="0.7"/>
+                          <circle cx="24" cy="24" r="16" stroke={vs.color} strokeWidth="0.5" strokeDasharray="2 2" opacity="0.5"/>
+                          <text x="24" y="29" textAnchor="middle" fill={vs.color} fontSize="16" fontFamily="IBM Plex Mono">
+                            {r.verdict.status === "fulfilled" ? "✓" : r.verdict.status === "missed" ? "✗" : r.verdict.status === "partial" ? "◑" : "?"}
+                          </text>
+                        </svg>
+                      </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-serif text-base text-ivory-record group-hover:text-signal-cyan transition-colors leading-tight">
+                        <p className="font-display text-xl text-parchment group-hover:text-verdict-gold-light transition-colors leading-tight">
                           {r.oath.title}
-                        </h3>
-                        <p className="font-mono text-xs text-ink-grey mt-0.5">
-                          {shortAddr(r.oath.creator)}
                         </p>
+                        <p className="font-mono text-xs text-ash mt-1">{shortAddr(r.oath.creator)}</p>
                       </div>
                     </div>
-                    <p className="text-sm text-ivory-record/70 italic line-clamp-2">
-                      &ldquo;{r.verdict.short_reason}&rdquo;
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-xs text-ink-grey">
-                        Confidence: {r.verdict.confidence}%
-                      </span>
-                      <span className="font-mono text-xs text-ink-grey">
-                        {formatIsoDate(r.verdict.resolved_at)}
-                      </span>
+
+                    {/* Verdict details */}
+                    <div className="px-5 pb-5 space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="border border-[var(--rule-line)] p-3 rounded">
+                          <p className="font-mono text-xs text-ash mb-1">Confidence</p>
+                          <p className="font-display text-2xl" style={{ color: vs.color }}>{r.verdict.confidence}%</p>
+                        </div>
+                        <div className="border border-[var(--rule-line)] p-3 rounded">
+                          <p className="font-mono text-xs text-ash mb-1">Alignment</p>
+                          <p className="font-display text-2xl text-parchment capitalize">{r.verdict.source_alignment}</p>
+                        </div>
+                      </div>
+
+                      <div className="border-l-2 pl-3" style={{ borderColor: `${vs.color}50` }}>
+                        <p className="text-parchment-dim text-sm italic leading-relaxed line-clamp-2">
+                          &ldquo;{r.verdict.short_reason}&rdquo;
+                        </p>
+                      </div>
+
+                      <div className="flex items-center justify-between border-t border-[var(--rule-line)] pt-3">
+                        <p className="font-mono text-xs text-ash">
+                          Resolved {formatIsoDate(r.verdict.resolved_at)}
+                        </p>
+                        <p className="font-mono text-xs text-ash">{shortAddr(r.verdict.resolver)}</p>
+                      </div>
                     </div>
-                  </div>
-                </Link>
-              </motion.div>
-            ))}
+                  </Link>
+                </motion.div>
+              );
+            })}
           </div>
         )}
       </div>
