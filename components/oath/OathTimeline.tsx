@@ -6,14 +6,15 @@ import type { Oath } from "@/lib/genlayer/types";
 
 interface Props {
   oath: Oath;
+  evidenceCount?: number;
 }
 
 type Stage = "created" | "evidence" | "verdict" | "settled";
 
-function getStage(oath: Oath): Stage {
+function getStage(oath: Oath, evidenceCount: number): Stage {
   if (oath.settled) return "settled";
   if (oath.status !== "active") return "verdict";
-  if (isPastDeadline(oath.deadline_unix)) return "evidence";
+  if (evidenceCount > 0 || isPastDeadline(oath.deadline_unix)) return "evidence";
   return "created";
 }
 
@@ -26,8 +27,8 @@ const stages: { key: Stage; label: string; desc: string }[] = [
 
 const stageOrder: Stage[] = ["created", "evidence", "verdict", "settled"];
 
-export default function OathTimeline({ oath }: Props) {
-  const current = getStage(oath);
+export default function OathTimeline({ oath, evidenceCount = 0 }: Props) {
+  const current = getStage(oath, evidenceCount);
   const currentIdx = stageOrder.indexOf(current);
 
   return (

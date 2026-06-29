@@ -31,8 +31,7 @@ export default function OathSeal({ status, size = 80, animate = true }: Props) {
       initial={animate ? { scale: 0.5, opacity: 0, rotate: -20 } : false}
       animate={animate ? { scale: 1, opacity: 1, rotate: 0 } : false}
       transition={{ type: "spring", stiffness: 200, damping: 15, delay: 0.1 }}
-      style={{ width: size, height: size }}
-      className="relative flex items-center justify-center"
+      className="flex flex-col items-center gap-1"
     >
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
         <circle cx={cx} cy={cx} r={r} fill={cfg.bg} stroke={cfg.color} strokeWidth={1.5} />
@@ -49,12 +48,12 @@ export default function OathSeal({ status, size = 80, animate = true }: Props) {
           {cfg.symbol}
         </text>
       </svg>
-      <div
-        className="absolute bottom-0 left-1/2 -translate-x-1/2 font-mono text-center"
-        style={{ fontSize: size * 0.1, color: cfg.color, letterSpacing: "0.15em" }}
+      <span
+        className="font-mono text-center"
+        style={{ fontSize: size * 0.11, color: cfg.color, letterSpacing: "0.15em" }}
       >
         {cfg.label}
-      </div>
+      </span>
     </motion.div>
   );
 }

@@ -75,7 +75,7 @@ export default function OathDetailPage({ params }: Props) {
           {/* Left: Timeline */}
           <div className="hidden lg:block">
             <div className="glass rounded-xl p-5 sticky top-20">
-              <OathTimeline oath={oath} />
+              <OathTimeline oath={oath} evidenceCount={evidence.length} />
             </div>
           </div>
 

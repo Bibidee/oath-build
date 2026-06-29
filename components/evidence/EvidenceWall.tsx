@@ -74,7 +74,7 @@ export default function EvidenceWall({ evidence }: Props) {
                     </span>
                     <span className="font-mono text-xs text-ink-grey capitalize">{ev.source_type}</span>
                   </div>
-                  <p className="text-ivory-record text-sm leading-relaxed mb-2">{ev.claim}</p>
+                  <p className="text-ivory-record text-sm leading-relaxed mb-2 break-words">{ev.claim}</p>
                   <div className="flex items-center gap-3 flex-wrap">
                     <a
                       href={ev.source_url}
