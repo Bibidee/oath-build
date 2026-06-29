@@ -56,7 +56,7 @@ export default function ActionDock({
       className="glass rounded-xl p-4 sticky bottom-4"
     >
       <div className="flex items-center gap-2 flex-wrap">
-        {!oath.settled && !past && (
+        {!oath.settled && (
           <>
             <button
               onClick={() => window.navigator.clipboard.writeText(window.location.href)}
@@ -65,11 +65,6 @@ export default function ActionDock({
               <Eye size={14} />
               Copy Link
             </button>
-          </>
-        )}
-
-        {past && !oath.settled && (
-          <>
             <button
               onClick={isConnected ? onSubmitEvidence : connect}
               className="flex items-center gap-2 px-4 py-2 rounded-lg border border-signal-cyan/40 text-signal-cyan hover:bg-signal-cyan/10 transition-all font-mono text-sm"
