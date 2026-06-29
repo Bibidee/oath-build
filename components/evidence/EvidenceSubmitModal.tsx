@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Loader2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWallet } from "@/lib/context/WalletContext";
 import { submitEvidence } from "@/lib/genlayer/client";
 import { getExplorerTxUrl } from "@/lib/genlayer/client";
@@ -30,6 +31,7 @@ interface Props {
 
 export default function EvidenceSubmitModal({ oathId, open, onClose, onSuccess }: Props) {
   const { account, connect, isConnected } = useWallet();
+  const queryClient = useQueryClient();
   const [sourceUrl, setSourceUrl] = useState("");
   const [sourceType, setSourceType] = useState("other");
   const [claim, setClaim] = useState("");
@@ -50,6 +52,7 @@ export default function EvidenceSubmitModal({ oathId, open, onClose, onSuccess }
         account
       );
       setTxHash(hash);
+      await queryClient.invalidateQueries({ queryKey: ["evidence", oathId] });
       onSuccess?.();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Transaction failed");

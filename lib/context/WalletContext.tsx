@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
 
 interface WalletContextValue {
   account: `0x${string}` | null;
@@ -44,6 +44,25 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   const disconnect = useCallback(() => {
     setAccount(null);
     setError(null);
+  }, []);
+
+  // Auto-reconnect on page load if MetaMask is already authorized
+  useEffect(() => {
+    if (typeof window === "undefined" || !window.ethereum) return;
+    window.ethereum.request({ method: "eth_accounts" }).then((accounts) => {
+      const list = accounts as string[];
+      if (list.length > 0) setAccount(list[0] as `0x${string}`);
+    }).catch(() => {});
+
+    // Keep in sync if user switches account or disconnects in MetaMask
+    const handleAccountsChanged = (accounts: unknown) => {
+      const list = accounts as string[];
+      setAccount(list.length > 0 ? (list[0] as `0x${string}`) : null);
+    };
+    window.ethereum.on("accountsChanged", handleAccountsChanged);
+    return () => {
+      window.ethereum?.removeListener("accountsChanged", handleAccountsChanged);
+    };
   }, []);
 
   return (
