@@ -40,4 +40,5 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-.vercel
+# local test accounts/private keys, never commit
+scripts/.test-accounts.json
