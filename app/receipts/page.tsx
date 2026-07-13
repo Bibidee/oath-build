@@ -35,20 +35,23 @@ export default function ReceiptsPage() {
   useEffect(() => {
     if (!summaries) return;
     const settled = summaries.filter((s) => s.settled);
-    Promise.allSettled(
+    Promise.all(
       settled.map(async (s) => {
         const [oath, verdict] = await Promise.all([getOath(s.oath_id), getVerdict(s.oath_id)]);
         if (!verdict) return null;
         return { oath, verdict };
       })
-    ).then((results) => {
-      const valid = results
-        .filter((r): r is PromiseFulfilledResult<SettledOath | null> => r.status === "fulfilled")
-        .map((r) => r.value)
-        .filter((v): v is SettledOath => v !== null);
-      setReceipts(valid);
-      setLoading(false);
-    });
+    )
+      .then((results) => {
+        const valid = results.filter((v): v is SettledOath => v !== null);
+        setReceipts(valid);
+      })
+      .catch(() => {
+        // Keep whatever receipts are already on screen rather than clearing
+        // them on a transient RPC failure - the next successful refetch
+        // will correct the list.
+      })
+      .finally(() => setLoading(false));
   }, [summaries]);
 
   const demoReceipt: SettledOath = {

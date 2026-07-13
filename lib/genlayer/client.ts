@@ -41,86 +41,69 @@ export function getContractAddress(): `0x${string}` {
 //  READ METHODS                                                       //
 // ------------------------------------------------------------------ //
 
-export async function getOath(oath_id: number): Promise<Oath> {
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// The hosted Studio RPC occasionally drops an individual read under
+// concurrent load (many oaths fetched in parallel). Retrying a couple of
+// times keeps a transient blip from silently vanishing a row in the UI.
+async function readContract(functionName: string, args: unknown[]): Promise<unknown> {
   const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_oath",
-    args: [oath_id],
-  });
-  return result as Oath;
+  const attempts = 3;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await client.readContract({
+        address: getContractAddress(),
+        functionName,
+        args,
+      });
+    } catch (err) {
+      lastError = err;
+      if (attempt < attempts - 1) await sleep(400 * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+export async function getOath(oath_id: number): Promise<Oath> {
+  return (await readContract("get_oath", [oath_id])) as Oath;
 }
 
 export async function getOathCount(): Promise<number> {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_oath_count",
-    args: [],
-  });
-  return result as number;
+  return (await readContract("get_oath_count", [])) as number;
 }
 
 export async function getEvidence(oath_id: number): Promise<EvidencePacket[]> {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_evidence",
-    args: [oath_id],
-  });
-  return (result as EvidencePacket[]) || [];
+  return ((await readContract("get_evidence", [oath_id])) as EvidencePacket[]) || [];
 }
 
 export async function getVerdict(oath_id: number): Promise<VerdictReceipt | null> {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_verdict",
-    args: [oath_id],
-  });
-  const v = result as Record<string, unknown>;
+  const v = (await readContract("get_verdict", [oath_id])) as Record<string, unknown>;
   if (!v || Object.keys(v).length === 0) return null;
   return v as unknown as VerdictReceipt;
 }
 
 export async function getAppeals(oath_id: number): Promise<AppealPacket[]> {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_appeals",
-    args: [oath_id],
-  });
-  return (result as AppealPacket[]) || [];
+  return ((await readContract("get_appeals", [oath_id])) as AppealPacket[]) || [];
 }
 
 export async function getUserOaths(address: string): Promise<number[]> {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_user_oaths",
-    args: [address],
-  });
-  return (result as number[]) || [];
+  return ((await readContract("get_user_oaths", [address])) as number[]) || [];
 }
 
 export async function getOathSummary(oath_id: number): Promise<OathSummary> {
-  const client = getClient();
-  const result = await client.readContract({
-    address: getContractAddress(),
-    functionName: "get_oath_summary",
-    args: [oath_id],
-  });
-  return result as OathSummary;
+  return (await readContract("get_oath_summary", [oath_id])) as OathSummary;
 }
 
 export async function getAllOathSummaries(): Promise<OathSummary[]> {
   const count = await getOathCount();
   if (count === 0) return [];
-  const promises = Array.from({ length: count }, (_, i) => getOathSummary(i));
-  const results = await Promise.allSettled(promises);
-  return results
-    .filter((r): r is PromiseFulfilledResult<OathSummary> => r.status === "fulfilled")
-    .map((r) => r.value);
+  const results = await Promise.all(
+    Array.from({ length: count }, (_, i) => getOathSummary(i))
+  );
+  return results;
 }
 
 // ------------------------------------------------------------------ //
