@@ -45,14 +45,71 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// The hosted Studio RPC enforces "max 20 gen_call/sim_call requests per 10s
+// per contract address". Pages like the ledger/receipts fan out one read per
+// oath in parallel, which blows straight past that limit as the oath count
+// grows. This sliding-window limiter keeps this tab's own call rate under
+// the server cap (with margin) instead of firing everything at once and
+// hoping retries save it.
+class SlidingWindowRateLimiter {
+  private timestamps: number[] = [];
+  constructor(private maxCalls: number, private windowMs: number) {}
+
+  async acquire(): Promise<void> {
+    for (;;) {
+      const now = Date.now();
+      this.timestamps = this.timestamps.filter((t) => now - t < this.windowMs);
+      if (this.timestamps.length < this.maxCalls) {
+        this.timestamps.push(now);
+        return;
+      }
+      const oldest = this.timestamps[0];
+      await sleep(this.windowMs - (now - oldest) + 50);
+    }
+  }
+}
+
+const rpcRateLimiter = new SlidingWindowRateLimiter(8, 10_000);
+
+// The Studio instance also enforces a global "8 execution slots" concurrency
+// cap across ALL contracts/users, separate from the per-contract rate limit
+// above. The rate limiter alone still lets many calls be in-flight at once;
+// this semaphore caps how many of THIS tab's reads are actually outstanding
+// at any moment, well under that shared ceiling.
+class Semaphore {
+  private available: number;
+  private waiters: Array<() => void> = [];
+  constructor(concurrency: number) {
+    this.available = concurrency;
+  }
+  async acquire(): Promise<() => void> {
+    if (this.available > 0) {
+      this.available--;
+      return () => this.release();
+    }
+    await new Promise<void>((resolve) => this.waiters.push(resolve));
+    this.available--;
+    return () => this.release();
+  }
+  private release() {
+    this.available++;
+    const next = this.waiters.shift();
+    if (next) next();
+  }
+}
+
+const rpcConcurrencyLimiter = new Semaphore(3);
+
 // The hosted Studio RPC occasionally drops an individual read under
 // concurrent load (many oaths fetched in parallel). Retrying a couple of
 // times keeps a transient blip from silently vanishing a row in the UI.
 async function readContract(functionName: string, args: unknown[]): Promise<unknown> {
   const client = getClient();
-  const attempts = 3;
+  const attempts = 4;
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt++) {
+    await rpcRateLimiter.acquire();
+    const release = await rpcConcurrencyLimiter.acquire();
     try {
       return await client.readContract({
         address: getContractAddress(),
@@ -61,7 +118,9 @@ async function readContract(functionName: string, args: unknown[]): Promise<unkn
       });
     } catch (err) {
       lastError = err;
-      if (attempt < attempts - 1) await sleep(400 * (attempt + 1));
+      if (attempt < attempts - 1) await sleep(600 * (attempt + 1));
+    } finally {
+      release();
     }
   }
   throw lastError;
