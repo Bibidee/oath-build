@@ -36,7 +36,7 @@ GenLayer Intelligent Contracts process natural language, unstructured evidence, 
 | `submit_appeal` | File an appeal against a settled verdict |
 | `request_appeal_verdict` | Trigger validator re-review of a filed appeal |
 
-**Deployed contract:** `0x6D1C2B1374b0a1F80e0a4aaC2D75CDE65800A68F`
+**Deployed contract:** `0xB2a42fC3b8DF9398C7E8f2D31129f9c424AD2ce2`
 
 ---
 

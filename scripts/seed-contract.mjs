@@ -6,7 +6,7 @@
 import { createClient, createAccount, chains } from "genlayer-js";
 
 const RPC_URL = process.env.NEXT_PUBLIC_GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS || "0x6D1C2B1374b0a1F80e0a4aaC2D75CDE65800A68F";
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS || "0xB2a42fC3b8DF9398C7E8f2D31129f9c424AD2ce2";
 
 const account = createAccount();
 console.log(`Using throwaway account: ${account.address}`);
@@ -76,14 +76,18 @@ async function main() {
 
   await write("request_verdict", [oath1Id]);
 
-  await write("submit_appeal", [
-    oath1Id,
-    "new_evidence",
-    "https://bitcoin.org/en/",
-    "The genesis block timestamp deserves a second look against the official bitcoin.org project history.",
-  ]);
-
-  await write("request_appeal_verdict", [oath1Id, 0]);
+  const oath1AfterVerdict = await read("get_oath", [oath1Id]);
+  if (oath1AfterVerdict.settled) {
+    await write("submit_appeal", [
+      oath1Id,
+      "new_evidence",
+      "https://bitcoin.org/en/",
+      "The genesis block timestamp deserves a second look against the official bitcoin.org project history.",
+    ]);
+    await write("request_appeal_verdict", [oath1Id, 0]);
+  } else {
+    console.log(`   oath ${oath1Id} did not settle (status=${oath1AfterVerdict.status}), skipping appeal`);
+  }
 
   // --- Oath 2: active, evidence submitted, verdict not yet requested ---
   await write("create_oath", [
