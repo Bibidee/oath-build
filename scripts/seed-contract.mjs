@@ -6,7 +6,7 @@
 import { createClient, createAccount, chains } from "genlayer-js";
 
 const RPC_URL = process.env.NEXT_PUBLIC_GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS || "0xB2a42fC3b8DF9398C7E8f2D31129f9c424AD2ce2";
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS || "0x2E03AF25322A2DE71ECb2bD186078B6EDdc2652E";
 
 const account = createAccount();
 console.log(`Using throwaway account: ${account.address}`);
