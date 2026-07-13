@@ -218,7 +218,7 @@ class OathContract(gl.Contract):
             evidence_text = ""
             for ev in evidence_items:
                 try:
-                    page_content = gl.get_webpage(ev["source_url"], mode="text")
+                    page_content = gl.nondet.web.render(ev["source_url"])
                     page_content = page_content[:MAX_FETCHED_CHARS]
                 except Exception as e:
                     page_content = f"(failed to fetch this source: {e})"
@@ -393,7 +393,7 @@ Return ONLY the JSON object. No markdown. No explanation."""
         def nondet_appeal() -> str:
             if new_evidence_url:
                 try:
-                    new_evidence_content = gl.get_webpage(new_evidence_url, mode="text")
+                    new_evidence_content = gl.nondet.web.render(new_evidence_url)
                     new_evidence_content = new_evidence_content[:MAX_FETCHED_CHARS]
                 except Exception as e:
                     new_evidence_content = f"(failed to fetch this source: {e})"
