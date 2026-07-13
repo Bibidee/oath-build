@@ -4,6 +4,7 @@
 from genlayer import *
 import json
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 
 def to_json(value) -> str:
@@ -23,6 +24,25 @@ def utcnow() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def now_unix() -> int:
+    return int(datetime.now(timezone.utc).timestamp())
+
+
+def extract_domain(url: str) -> str:
+    host = urlparse(url).netloc.lower()
+    if host.startswith("www."):
+        host = host[4:]
+    return host
+
+
+def assert_source_permitted(source_url: str, accepted_sources: str) -> None:
+    domain = extract_domain(source_url)
+    assert domain, "source_url has no discernible domain"
+    assert domain in accepted_sources.lower(), (
+        f"source_url domain '{domain}' is not listed in this oath's accepted_sources"
+    )
+
+
 ALLOWED_STATUSES = {
     "fulfilled", "partial", "missed", "unverifiable",
     "invalid_oath", "not_due", "excluded", "needs_more_evidence",
@@ -37,6 +57,8 @@ ALLOWED_APPEAL_BASES = {
 
 ALLOWED_SOURCE_ALIGNMENTS = {"strong", "moderate", "weak", "conflicting", "none"}
 ALLOWED_WINNING_SIDES = {"fulfilment", "challenge", "neutral"}
+
+APPEAL_WINDOW_SECONDS = 7 * 24 * 60 * 60
 
 
 class OathContract(gl.Contract):
@@ -128,6 +150,7 @@ class OathContract(gl.Contract):
 
         oath = safe_loads(self.oaths[key], {})
         assert not oath.get("settled", False), "oath is settled"
+        assert_source_permitted(source_url, oath.get("accepted_sources", ""))
 
         ev_list = safe_loads(self.evidence.get(key, "[]"), [])
         evidence_id = len(ev_list)
@@ -154,24 +177,69 @@ class OathContract(gl.Contract):
         ev_list = safe_loads(self.evidence.get(key, "[]"), [])
         assert len(ev_list) > 0, "no evidence submitted"
 
-        evidence_text = ""
-        for ev in ev_list:
-            evidence_text += (
-                f"\n- [{ev['side'].upper()}] {ev['source_type']} | {ev['source_url']}\n"
-                f"  Claim: {ev['claim']}\n"
-            )
+        current_unix = now_unix()
+        if current_unix < int(oath["deadline_unix"]):
+            verdict = {
+                "oath_id": oath_id,
+                "status": "not_due",
+                "confidence": 100,
+                "source_alignment": "none",
+                "winning_side": "neutral",
+                "short_reason": "Deadline has not passed yet.",
+                "canonical_json": to_json({
+                    "status": "not_due",
+                    "confidence": 100,
+                    "source_alignment": "none",
+                    "winning_side": "neutral",
+                    "short_reason": "Deadline has not passed yet.",
+                }),
+                "resolved_at": utcnow(),
+                "resolved_at_unix": current_unix,
+                "resolver": str(gl.message.sender_address),
+            }
+            self.verdicts[key] = to_json(verdict)
+            oath["status"] = "not_due"
+            oath["settled"] = False
+            self.oaths[key] = to_json(oath)
+            return
 
-        prompt_text = f"""You are a GenLayer validator judging a public promise called an Oath.
+        title = oath["title"]
+        promise = oath["promise"]
+        deadline_unix = oath["deadline_unix"]
+        success_criteria = oath["success_criteria"]
+        required_deliverables = oath["required_deliverables"]
+        accepted_sources = oath["accepted_sources"]
+        exclusions = oath["exclusions"]
+        evidence_items = list(ev_list)
 
-Decide whether the promise was fulfilled based only on the oath text, success criteria, deadline, exclusions, accepted sources, and submitted public evidence.
+        MAX_FETCHED_CHARS = 3000
+
+        def nondet_verdict() -> str:
+            evidence_text = ""
+            for ev in evidence_items:
+                try:
+                    page_content = gl.get_webpage(ev["source_url"], mode="text")
+                    page_content = page_content[:MAX_FETCHED_CHARS]
+                except Exception as e:
+                    page_content = f"(failed to fetch this source: {e})"
+                evidence_text += (
+                    f"\n- [{ev['side'].upper()}] {ev['source_type']} | {ev['source_url']}\n"
+                    f"  Claim: {ev['claim']}\n"
+                    f"  Fetched page content:\n{page_content}\n"
+                )
+
+            return f"""You are a GenLayer validator judging a public promise called an Oath.
+
+Decide whether the promise was fulfilled based only on the oath text, success criteria, deadline, exclusions, accepted sources, and the fetched content of the submitted public evidence.
 
 Rules:
 - Do not reward effort unless the promised outcome was materially achieved.
-- Do not invent evidence.
+- Do not invent evidence. Base your judgment strictly on the fetched page content below, not on assumptions about the URL or prior knowledge.
 - Do not use private information.
 - If the oath is too vague to judge, return invalid_oath.
-- If evidence is insufficient or contradictory, return unverifiable or needs_more_evidence.
+- If a fetched source failed to load, evidence is insufficient, or evidence is contradictory, return unverifiable or needs_more_evidence.
 - If a stated exclusion clearly applies, return excluded.
+- Each evidence source has already been verified to fall within Accepted Sources; you do not need to re-check that.
 
 Return ONLY a valid JSON object with exactly these keys:
 - status: one of fulfilled, partial, missed, unverifiable, invalid_oath, not_due, excluded, needs_more_evidence
@@ -181,27 +249,25 @@ Return ONLY a valid JSON object with exactly these keys:
 - short_reason: string under 220 characters
 
 --- OATH ---
-Title: {oath['title']}
-Promise: {oath['promise']}
-Deadline (unix): {oath['deadline_unix']}
-Success Criteria: {oath['success_criteria']}
-Required Deliverables: {oath['required_deliverables']}
-Accepted Sources: {oath['accepted_sources']}
-Exclusions: {oath['exclusions']}
+Current time (unix): {current_unix}
+Title: {title}
+Promise: {promise}
+Deadline (unix): {deadline_unix}
+Success Criteria: {success_criteria}
+Required Deliverables: {required_deliverables}
+Accepted Sources: {accepted_sources}
+Exclusions: {exclusions}
 
 --- EVIDENCE ---
 {evidence_text}
 
 Return ONLY the JSON object. No markdown. No explanation."""
 
-        task = "Judge the Oath based on the evidence. Return only compact JSON."
+        task = "Judge the Oath based on the fetched evidence. Return only compact JSON."
         criteria = (
-            "The verdict must be based solely on the oath text and submitted public evidence. "
+            "The verdict must be based solely on the oath text and the fetched content of the submitted public evidence. "
             "Return only the JSON object with keys: status, confidence, source_alignment, winning_side, short_reason."
         )
-
-        def nondet_verdict() -> str:
-            return prompt_text
 
         result_raw = gl.eq_principle.prompt_non_comparative(
             nondet_verdict,
@@ -252,6 +318,7 @@ Return ONLY the JSON object. No markdown. No explanation."""
             "short_reason": canonical["short_reason"],
             "canonical_json": to_json(canonical),
             "resolved_at": utcnow(),
+            "resolved_at_unix": current_unix,
             "resolver": str(gl.message.sender_address),
         }
         self.verdicts[key] = to_json(verdict)
@@ -276,9 +343,15 @@ Return ONLY the JSON object. No markdown. No explanation."""
         assert basis in ALLOWED_APPEAL_BASES, "invalid appeal basis"
         assert len(argument) > 20, "argument too short"
 
+        verdict = safe_loads(self.verdicts.get(key, "{}"), {})
+        assert verdict, "no verdict to appeal"
+        appeal_deadline = int(verdict.get("resolved_at_unix", 0)) + APPEAL_WINDOW_SECONDS
+        assert now_unix() <= appeal_deadline, "appeal window has closed"
+
         if new_evidence_url:
             assert new_evidence_url.startswith("https://") or new_evidence_url.startswith("http://"), \
                 "new_evidence_url must be a valid URL"
+            assert_source_permitted(new_evidence_url, oath.get("accepted_sources", ""))
 
         ap_list = safe_loads(self.appeals.get(key, "[]"), [])
         appeal_id = len(ap_list)
@@ -310,16 +383,36 @@ Return ONLY the JSON object. No markdown. No explanation."""
         assert not appeal.get("resolved", False), "appeal already resolved"
 
         original_verdict = safe_loads(self.verdicts[key], {})
+        basis = appeal["basis"]
+        argument = appeal["argument"]
+        new_evidence_url = appeal["new_evidence_url"]
+        current_unix = now_unix()
 
-        prompt_text = f"""You are a GenLayer validator reviewing an appeal against a prior verdict on a public promise (Oath).
+        MAX_FETCHED_CHARS = 3000
+
+        def nondet_appeal() -> str:
+            if new_evidence_url:
+                try:
+                    new_evidence_content = gl.get_webpage(new_evidence_url, mode="text")
+                    new_evidence_content = new_evidence_content[:MAX_FETCHED_CHARS]
+                except Exception as e:
+                    new_evidence_content = f"(failed to fetch this source: {e})"
+            else:
+                new_evidence_content = "none"
+
+            return f"""You are a GenLayer validator reviewing an appeal against a prior verdict on a public promise (Oath).
+
+Current time (unix): {current_unix}
 
 Original verdict: {to_json(original_verdict)}
 
-Appeal basis: {appeal['basis']}
-Appellant argument: {appeal['argument']}
-New evidence URL: {appeal['new_evidence_url'] or 'none'}
+Appeal basis: {basis}
+Appellant argument: {argument}
+New evidence URL: {new_evidence_url or 'none'}
+Fetched new evidence content:
+{new_evidence_content}
 
-Decide whether the appeal materially changes the verdict.
+Decide whether the appeal materially changes the verdict. Base your decision strictly on the fetched content above, not on assumptions about the URL.
 
 Return ONLY a valid JSON object with these keys:
 - accept_appeal: true or false
@@ -333,9 +426,6 @@ Return ONLY the JSON. No markdown. No explanation."""
 
         task = "Review the appeal. Decide if it materially changes the verdict. Return only JSON."
         criteria = "Return only the JSON object with keys: accept_appeal, new_status, confidence, source_alignment, winning_side, short_reason."
-
-        def nondet_appeal() -> str:
-            return prompt_text
 
         result_raw = gl.eq_principle.prompt_non_comparative(
             nondet_appeal,
@@ -378,6 +468,7 @@ Return ONLY the JSON. No markdown. No explanation."""
                 "short_reason": canonical["short_reason"],
                 "canonical_json": to_json(canonical),
                 "resolved_at": utcnow(),
+                "resolved_at_unix": current_unix,
                 "resolver": str(gl.message.sender_address),
             }
             self.verdicts[key] = to_json(updated_verdict)
