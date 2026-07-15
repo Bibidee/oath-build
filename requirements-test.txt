@@ -1,0 +1,10 @@
+# Pinned test dependency for tests/direct/test_oath_contract.py.
+# genlayer-test provides the `gltest` package/CLI used to run direct
+# contract tests against a live GenLayer Studio simulator.
+#
+# Verified installable and current via:
+#   pip index versions genlayer-test
+# (latest published version as of this pin: 0.1.2)
+#
+# genlayer-test requires Python >= 3.12.
+genlayer-test==0.1.2

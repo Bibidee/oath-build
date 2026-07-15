@@ -68,9 +68,20 @@ Deploy `contracts/oath.py` to StudioNet via [GenLayer Studio](https://studio.gen
 
 ## Tests
 
+Requires Python >= 3.12 (a requirement of `genlayer-test` itself).
+
 ```bash
+pip install -r requirements-test.txt
 genlayer test tests/direct/test_oath_contract.py
 ```
+
+`requirements-test.txt` pins `genlayer-test==0.1.2` — the latest version
+published on PyPI as of this pin (verify with `pip index versions
+genlayer-test`). This installs the `gltest` package/CLI the test file
+imports from. Tests run against a live GenLayer Studio simulator; there is
+no mock for `gl.eq_principle`/`gl.nondet.exec_prompt`, so
+`test_settled_verdict_and_appeal_flow` exercises the real contract's
+verdict and appeal judgment paths end-to-end.
 
 ## Getting Started (original)
 

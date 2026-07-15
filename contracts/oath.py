@@ -214,7 +214,10 @@ class OathContract(gl.Contract):
 
         MAX_FETCHED_CHARS = 3000
 
-        def nondet_verdict() -> str:
+        # ---- STEP 1: construct the judgment prompt (deterministic string
+        # building; the only nondeterministic part is the web fetch below,
+        # which happens inside the nondet callback alongside exec_prompt). --
+        def build_verdict_prompt() -> str:
             evidence_text = ""
             for ev in evidence_items:
                 try:
@@ -263,21 +266,45 @@ Exclusions: {exclusions}
 
 Return ONLY the JSON object. No markdown. No explanation."""
 
+        # ---- STEP 2: the nondeterministic judgment callback. This is the
+        # single source of truth for the verdict's AI execution: it builds
+        # the prompt, then EXPLICITLY calls gl.nondet.exec_prompt and
+        # returns that raw model output untouched. No JSON parsing happens
+        # in here - this callback's only job is to produce the raw result
+        # that GenLayer validators reach consensus on. -------------------
+        def nondet_verdict() -> str:
+            prompt_text = build_verdict_prompt()
+            raw_model_result = gl.nondet.exec_prompt(prompt_text)
+            return raw_model_result
+
         task = "Judge the Oath based on the fetched evidence. Return only compact JSON."
         criteria = (
             "The verdict must be based solely on the oath text and the fetched content of the submitted public evidence. "
             "Return only the JSON object with keys: status, confidence, source_alignment, winning_side, short_reason."
         )
 
+        # ---- STEP 3: consensus. gl.eq_principle.prompt_non_comparative runs
+        # nondet_verdict() independently across validators (each doing its
+        # own gl.nondet.exec_prompt call) and arbitrates agreement using
+        # `task`/`criteria`, since independent LLM calls won't produce
+        # byte-identical text even when they agree semantically. Its return
+        # value is the raw, consensus-agreed model output from STEP 2 -
+        # nothing has parsed or interpreted it yet. --------------------
         result_raw = gl.eq_principle.prompt_non_comparative(
             nondet_verdict,
             task=task,
             criteria=criteria,
         )
 
+        # ---- STEP 4: extract/parse JSON from the raw consensus result.
+        # This runs deterministically, after consensus, on the agreed text.
         raw = result_raw.strip() if isinstance(result_raw, str) else str(result_raw)
         parsed = safe_loads(raw, None)
 
+        # ---- STEP 5: validate. Malformed or unparseable model output is
+        # never upgraded into a false positive - it is explicitly mapped to
+        # the contract's legitimate "unverifiable" state, with confidence 0
+        # so it's unambiguous this was a parse failure, not a real judgment.
         if not parsed or not isinstance(parsed, dict):
             parsed = {
                 "status": "unverifiable",
@@ -307,6 +334,7 @@ Return ONLY the JSON object. No markdown. No explanation."""
             "short_reason": str(parsed.get("short_reason", ""))[:220],
         }
 
+        # ---- STEP 6: settlement (deterministic, using the validated JSON). --
         terminal_statuses = {"fulfilled", "partial", "missed", "excluded", "invalid_oath"}
 
         verdict = {
@@ -390,7 +418,11 @@ Return ONLY the JSON object. No markdown. No explanation."""
 
         MAX_FETCHED_CHARS = 3000
 
-        def nondet_appeal() -> str:
+        # ---- STEP 1: construct a FRESH appeal-review prompt. This is built
+        # from the original verdict (as read-only context to review) and the
+        # appellant's own basis/argument/new evidence - it does not reuse or
+        # derive from the original verdict's raw model output in any way. --
+        def build_appeal_prompt() -> str:
             if new_evidence_url:
                 try:
                     new_evidence_content = gl.nondet.web.render(new_evidence_url)
@@ -424,20 +456,38 @@ Return ONLY a valid JSON object with these keys:
 
 Return ONLY the JSON. No markdown. No explanation."""
 
+        # ---- STEP 2: the nondeterministic appeal-judgment callback. Exactly
+        # like the verdict path, this is the single source of truth for the
+        # appeal's AI execution: build the fresh prompt, EXPLICITLY call
+        # gl.nondet.exec_prompt (a second, independent model invocation -
+        # never the verdict's cached result), and return the raw output
+        # untouched. No JSON parsing happens in here. --------------------
+        def nondet_appeal() -> str:
+            prompt_text = build_appeal_prompt()
+            raw_model_result = gl.nondet.exec_prompt(prompt_text)
+            return raw_model_result
+
         task = "Review the appeal. Decide if it materially changes the verdict. Return only JSON."
         criteria = "Return only the JSON object with keys: accept_appeal, new_status, confidence, source_alignment, winning_side, short_reason."
 
+        # ---- STEP 3: consensus over the fresh appeal judgment. -------------
         result_raw = gl.eq_principle.prompt_non_comparative(
             nondet_appeal,
             task=task,
             criteria=criteria,
         )
 
+        # ---- STEP 4: extract/parse JSON from the raw consensus result
+        # (deterministic, after consensus). --------------------------------
         raw = result_raw.strip() if isinstance(result_raw, str) else str(result_raw)
         parsed = safe_loads(raw, {})
 
+        # ---- STEP 5: validate. Malformed/unparseable output safely falls
+        # back to an empty dict, so `accept_appeal` reads as False below -
+        # a parse failure can never be misread as an accepted appeal. -----
         accept = bool(parsed.get("accept_appeal", False))
 
+        # ---- STEP 6: settlement (deterministic, using the validated JSON).
         if accept:
             new_status = parsed.get("new_status", original_verdict.get("status", "unverifiable"))
             if new_status not in ALLOWED_STATUSES:

@@ -192,10 +192,14 @@ def test_request_verdict_not_due():
 
 def test_settled_verdict_and_appeal_flow():
     """
-    Full happy path through the real nondeterministic contract logic:
-    create -> submit evidence -> request_verdict settles the oath via a real
-    LLM judgment -> submit_appeal -> request_appeal_verdict resolves the
-    appeal via a second real LLM judgment.
+    Full happy path through the real contract logic, not a mock or a
+    reimplementation of it: create -> submit evidence -> request_verdict
+    settles the oath by running the contract's nondet_verdict callback,
+    which explicitly calls gl.nondet.exec_prompt and returns its raw
+    output for consensus -> submit_appeal -> request_appeal_verdict
+    resolves the appeal by running nondet_appeal, a second, independent
+    gl.nondet.exec_prompt call over a freshly built prompt (never the
+    original verdict's cached output).
     """
     contract = deploy_contract()
     oath_id = _settle_oath_with_evidence(contract, SETTLEABLE_OATH)
