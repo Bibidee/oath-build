@@ -2,6 +2,8 @@
 // STRICTLY sequentially: each write only fires after the previous one has
 // reached FINALIZED status. Nothing is queued or parallelized - test N+2's
 // transactions do not exist on-chain until test N+1 is fully resolved.
+// Every oath that actually settles also gets a real submit_appeal +
+// request_appeal_verdict round before moving on to the next test.
 //
 // Run: node scripts/run-20-tests.mjs
 
@@ -21,17 +23,29 @@ function clientFor(label) {
 // Sequential by construction: this function does not return until the
 // transaction it submitted has reached FINALIZED on-chain, so the caller's
 // next `write()` call cannot fire until this one is done.
+//
+// IMPORTANT: the leader's own execution_result being SUCCESS is NOT enough -
+// that only means the leader itself produced a result. If other validators,
+// running the same nondet callback independently, reach a genuinely
+// different judgment, GenVM's consensus can still come back
+// MAJORITY_DISAGREE, in which case the leader's proposed state change is
+// discarded and nothing is actually written on-chain. This is correct,
+// intentional consensus behavior (a disputed AI judgment should not settle
+// state), but callers must check `result_name`, not just the leader's own
+// execution_result, to know whether the write actually took effect.
 async function write(label, functionName, args) {
   const client = clientFor(label);
   const txHash = await client.writeContract({ address: CONTRACT_ADDRESS, functionName, args, value: 0n });
   console.log(`   tx ${txHash} submitted, waiting for FINALIZED...`);
   const receipt = await client.waitForTransactionReceipt({ hash: txHash, status: "FINALIZED", interval: 5000, retries: 60 });
   const execResult = receipt?.consensus_data?.leader_receipt?.[0]?.execution_result;
-  console.log(`   -> FINALIZED: ${execResult ?? "UNKNOWN"}`);
-  if (execResult !== "SUCCESS") {
+  const resultName = receipt?.result_name;
+  const consensusReached = resultName ? resultName.startsWith("MAJORITY_AGREE") || resultName === "AGREE" : true;
+  console.log(`   -> FINALIZED: leader=${execResult ?? "UNKNOWN"} consensus=${resultName ?? "UNKNOWN"}`);
+  if (execResult !== "SUCCESS" || !consensusReached) {
     console.log("   genvm_result:", JSON.stringify(receipt?.consensus_data?.leader_receipt?.[0]?.genvm_result, null, 2));
   }
-  return { txHash, execResult };
+  return { txHash, execResult, resultName, consensusReached, ok: execResult === "SUCCESS" && consensusReached };
 }
 
 function sleep(ms) {
@@ -164,6 +178,35 @@ const TESTS = [
   },
 ];
 
+// Nondeterministic judgment calls (request_verdict/request_appeal_verdict)
+// can legitimately come back MAJORITY_DISAGREE if independent validators
+// reach genuinely different conclusions - that's not a bug, it's consensus
+// correctly refusing to settle on disputed AI output. Retrying gives the
+// judgment another real, independent attempt rather than silently treating
+// a no-op transaction as done.
+async function writeWithConsensusRetry(label, functionName, args, maxAttempts = 3) {
+  let last;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    last = await write(label, functionName, args);
+    if (last.ok) return last;
+    console.log(`   consensus not reached (${last.resultName}) on attempt ${attempt}/${maxAttempts}, retrying judgment...`);
+  }
+  return last;
+}
+
+function appealBasisFor(status) {
+  switch (status) {
+    case "excluded":
+      return "exclusion_misapplied";
+    case "invalid_oath":
+      return "promise_meaning_misread";
+    case "missed":
+      return "wrong_source_interpretation";
+    default:
+      return "new_evidence";
+  }
+}
+
 async function runTest(t) {
   console.log(`\n=== ${t.name} ===`);
   const countBefore = await read("get_oath_count");
@@ -171,21 +214,69 @@ async function runTest(t) {
   console.log(`   creating oath id ${id}`);
 
   const create = await write("creator", "create_oath", t.oath);
-  if (create.execResult !== "SUCCESS") return { name: t.name, id, error: "create_oath failed" };
+  if (!create.ok) return { name: t.name, id, error: "create_oath failed" };
 
   for (const ev of t.evidence) {
     const evRes = await write("watcher", "submit_evidence", [id, ...ev]);
-    if (evRes.execResult !== "SUCCESS") return { name: t.name, id, error: "submit_evidence failed" };
+    if (!evRes.ok) return { name: t.name, id, error: "submit_evidence failed" };
   }
 
-  const verdictRes = await write("resolver", "request_verdict", [id]);
-  if (verdictRes.execResult !== "SUCCESS") return { name: t.name, id, error: "request_verdict failed" };
+  const verdictRes = await writeWithConsensusRetry("resolver", "request_verdict", [id]);
+  if (!verdictRes.ok) return { name: t.name, id, error: `request_verdict did not reach consensus (${verdictRes.resultName})` };
 
-  const finalOath = await read("get_oath", [id]);
+  const oathAfterVerdict = await read("get_oath", [id]);
   const verdict = await read("get_verdict", [id]);
-  console.log(`   RESULT: oath ${id} -> status=${finalOath.status} settled=${finalOath.settled}`);
+  console.log(`   VERDICT: oath ${id} -> status=${oathAfterVerdict.status} settled=${oathAfterVerdict.settled}`);
   console.log(`   reason: ${verdict.short_reason}`);
-  return { name: t.name, id, status: finalOath.status, settled: finalOath.settled, reason: verdict.short_reason };
+
+  const result = {
+    name: t.name,
+    id,
+    status: oathAfterVerdict.status,
+    settled: oathAfterVerdict.settled,
+    reason: verdict.short_reason,
+    appeal: null,
+  };
+
+  // Only settled oaths can be appealed (the contract itself enforces this -
+  // not_due/unverifiable/needs_more_evidence are correctly left unappealed).
+  if (!oathAfterVerdict.settled) {
+    return result;
+  }
+
+  const basis = appealBasisFor(oathAfterVerdict.status);
+  const appealEvidenceUrl = t.evidence[0][0];
+  const argument = `Requesting review of the "${oathAfterVerdict.status}" verdict for "${t.name}" to confirm the appeal path executes an independent, fresh judgment.`;
+
+  const appealRes = await write("appellant", "submit_appeal", [id, basis, appealEvidenceUrl, argument]);
+  if (!appealRes.ok) {
+    result.appeal = { error: "submit_appeal failed" };
+    return result;
+  }
+
+  const appealsBefore = await read("get_appeals", [id]);
+  const appealId = appealsBefore.length - 1;
+
+  const appealVerdictRes = await writeWithConsensusRetry("resolver", "request_appeal_verdict", [id, appealId]);
+  if (!appealVerdictRes.ok) {
+    result.appeal = { error: `request_appeal_verdict did not reach consensus (${appealVerdictRes.resultName})` };
+    return result;
+  }
+
+  const oathAfterAppeal = await read("get_oath", [id]);
+  const verdictAfterAppeal = await read("get_verdict", [id]);
+  console.log(`   APPEAL: oath ${id} appeal ${appealId} (basis=${basis}) -> final status=${oathAfterAppeal.status}`);
+  console.log(`   appeal reason: ${verdictAfterAppeal.short_reason}`);
+
+  result.appeal = {
+    appeal_id: appealId,
+    basis,
+    changed: verdictAfterAppeal.status !== verdict.status,
+    final_status: oathAfterAppeal.status,
+    reason: verdictAfterAppeal.short_reason,
+  };
+
+  return result;
 }
 
 async function main() {
@@ -216,7 +307,12 @@ async function main() {
 
   console.log("\n\n=== FINAL SUMMARY ===");
   for (const r of results) {
-    console.log(`${r.name}: oath ${r.id} -> ${r.error ?? r.status} (settled=${r.settled ?? "n/a"})`);
+    const appealNote = r.appeal
+      ? r.appeal.error
+        ? ` | appeal: ${r.appeal.error}`
+        : ` | appeal ${r.appeal.appeal_id} (${r.appeal.basis}): changed=${r.appeal.changed} final=${r.appeal.final_status}`
+      : "";
+    console.log(`${r.name}: oath ${r.id} -> ${r.error ?? r.status} (settled=${r.settled ?? "n/a"})${appealNote}`);
   }
 }
 
