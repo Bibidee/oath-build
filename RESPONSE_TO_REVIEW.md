@@ -28,7 +28,7 @@ On top of that, the nondet closure now actually **fetches the submitted evidence
 
 ## Live, on-chain evidence
 
-**Deployed contract:** [`0x2E03AF25322A2DE71ECb2bD186078B6EDdc2652E`](https://explorer-studio.genlayer.com/address/0x2E03AF25322A2DE71ECb2bD186078B6EDdc2652E) on GenLayer StudioNet
+**Deployed contract:** [`0x87d7DcE1E3932a2b6c57278802A14e00a2fA20E4`](https://explorer-studio.genlayer.com/address/0x87d7DcE1E3932a2b6c57278802A14e00a2fA20E4) on GenLayer StudioNet
 **Live app:** https://oath-build.vercel.app
 **Repo:** https://github.com/Bibidee/oath-build
 
