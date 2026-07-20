@@ -200,6 +200,17 @@ def test_settled_verdict_and_appeal_flow():
     resolves the appeal by running nondet_appeal, a second, independent
     gl.nondet.exec_prompt call over a freshly built prompt (never the
     original verdict's cached output).
+
+    This also substantively exercises the fix for the July 17 review
+    feedback ("pass the original oath terms and evidence into appeal
+    consensus"): request_appeal_verdict now reads the full original oath
+    dict (title/promise/deadline/success_criteria/required_deliverables/
+    accepted_sources/exclusions) and every original evidence item, and
+    re-fetches each original evidence source inside nondet_appeal. None of
+    that is optional/best-effort - if those reads or refetches raised, the
+    appeal transaction itself would fail. A successful, resolved appeal
+    below is direct proof that code path runs correctly end-to-end, not
+    just that it type-checks.
     """
     contract = deploy_contract()
     oath_id = _settle_oath_with_evidence(contract, SETTLEABLE_OATH)
@@ -207,6 +218,11 @@ def test_settled_verdict_and_appeal_flow():
     oath = contract.get_oath(args=[oath_id])
     assert oath["settled"] is True
     assert oath["status"] in TERMINAL_STATUSES
+    assert oath["title"] == SETTLEABLE_OATH["title"]
+    assert oath["success_criteria"] == SETTLEABLE_OATH["success_criteria"]
+
+    original_evidence = contract.get_evidence(args=[oath_id])
+    assert len(original_evidence) == 1
 
     verdict = contract.get_verdict(args=[oath_id])
     assert verdict["status"] in TERMINAL_STATUSES
@@ -218,7 +234,8 @@ def test_settled_verdict_and_appeal_flow():
             oath_id,
             "new_evidence",
             "https://bitcoin.org/en/",
-            "The genesis block timestamp deserves a second look against the official bitcoin.org project history.",
+            "The genesis block timestamp deserves a second look against the official bitcoin.org project history "
+            "and the original oath's own success criteria and evidence, not just the prior verdict summary.",
         ]
     )
     assert tx_execution_succeeded(appeal_result)
@@ -228,6 +245,10 @@ def test_settled_verdict_and_appeal_flow():
     assert appeals[0]["resolved"] is False
 
     resolver_contract = contract.connect(RESOLVER)
+    # This is the transaction that runs nondet_appeal, which now reads
+    # `oath` and `original_evidence_items` and re-fetches every original
+    # evidence source before the appellant's new evidence. If the oath
+    # terms/evidence plumbing were broken, this would fail here.
     appeal_verdict_result = resolver_contract.request_appeal_verdict(args=[oath_id, 0])
     assert tx_execution_succeeded(appeal_verdict_result)
 
@@ -236,6 +257,13 @@ def test_settled_verdict_and_appeal_flow():
 
     final_verdict = contract.get_verdict(args=[oath_id])
     assert final_verdict["status"] in TERMINAL_STATUSES
+
+    # The original oath's terms must be unchanged by the appeal round -
+    # only verdicts/appeals mutate, never the sworn oath itself.
+    oath_after_appeal = contract.get_oath(args=[oath_id])
+    assert oath_after_appeal["title"] == SETTLEABLE_OATH["title"]
+    assert oath_after_appeal["promise"] == SETTLEABLE_OATH["promise"]
+    assert oath_after_appeal["success_criteria"] == SETTLEABLE_OATH["success_criteria"]
 
 
 # ------------------------------------------------------------------ #

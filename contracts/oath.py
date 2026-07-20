@@ -410,19 +410,49 @@ Return ONLY the JSON object. No markdown. No explanation."""
         appeal = ap_list[appeal_id]
         assert not appeal.get("resolved", False), "appeal already resolved"
 
+        oath = safe_loads(self.oaths[key], {})
         original_verdict = safe_loads(self.verdicts[key], {})
+        original_evidence = safe_loads(self.evidence.get(key, "[]"), [])
         basis = appeal["basis"]
         argument = appeal["argument"]
         new_evidence_url = appeal["new_evidence_url"]
         current_unix = now_unix()
 
+        # Original oath terms, captured deterministically before the nondet
+        # callback runs, so the appeal is judged against the SAME sworn
+        # promise/criteria the original verdict was judged against - not
+        # just the original verdict's terse summary.
+        title = oath["title"]
+        promise = oath["promise"]
+        deadline_unix = oath["deadline_unix"]
+        success_criteria = oath["success_criteria"]
+        required_deliverables = oath["required_deliverables"]
+        accepted_sources = oath["accepted_sources"]
+        exclusions = oath["exclusions"]
+        original_evidence_items = list(original_evidence)
+
         MAX_FETCHED_CHARS = 3000
 
-        # ---- STEP 1: construct a FRESH appeal-review prompt. This is built
-        # from the original verdict (as read-only context to review) and the
-        # appellant's own basis/argument/new evidence - it does not reuse or
-        # derive from the original verdict's raw model output in any way. --
+        # ---- STEP 1: construct a FRESH appeal-review prompt. This now
+        # includes the full original oath terms and re-fetches every
+        # original evidence source (not just a summary of the prior
+        # verdict), plus the appellant's own basis/argument/new evidence -
+        # it does not reuse or derive from the original verdict's raw model
+        # output in any way. ------------------------------------------------
         def build_appeal_prompt() -> str:
+            original_evidence_text = ""
+            for ev in original_evidence_items:
+                try:
+                    page_content = gl.nondet.web.render(ev["source_url"])
+                    page_content = page_content[:MAX_FETCHED_CHARS]
+                except Exception as e:
+                    page_content = f"(failed to fetch this source: {e})"
+                original_evidence_text += (
+                    f"\n- [{ev['side'].upper()}] {ev['source_type']} | {ev['source_url']}\n"
+                    f"  Claim: {ev['claim']}\n"
+                    f"  Fetched page content:\n{page_content}\n"
+                )
+
             if new_evidence_url:
                 try:
                     new_evidence_content = gl.nondet.web.render(new_evidence_url)
@@ -434,17 +464,33 @@ Return ONLY the JSON object. No markdown. No explanation."""
 
             return f"""You are a GenLayer validator reviewing an appeal against a prior verdict on a public promise (Oath).
 
+Judge this appeal against the ORIGINAL OATH TERMS below, the same way the original verdict was judged - do not merely defer to the prior verdict's summary.
+
 Current time (unix): {current_unix}
 
-Original verdict: {to_json(original_verdict)}
+--- ORIGINAL OATH ---
+Title: {title}
+Promise: {promise}
+Deadline (unix): {deadline_unix}
+Success Criteria: {success_criteria}
+Required Deliverables: {required_deliverables}
+Accepted Sources: {accepted_sources}
+Exclusions: {exclusions}
 
+--- ORIGINAL EVIDENCE (re-fetched fresh for this appeal) ---
+{original_evidence_text}
+
+--- ORIGINAL VERDICT (for reference only - do not defer to it blindly) ---
+{to_json(original_verdict)}
+
+--- APPEAL ---
 Appeal basis: {basis}
 Appellant argument: {argument}
 New evidence URL: {new_evidence_url or 'none'}
 Fetched new evidence content:
 {new_evidence_content}
 
-Decide whether the appeal materially changes the verdict. Base your decision strictly on the fetched content above, not on assumptions about the URL.
+Decide whether, in light of the original oath terms, the original evidence, and any new evidence, the appeal materially changes the verdict. Base your decision strictly on the fetched content above, not on assumptions about the URLs.
 
 Return ONLY a valid JSON object with these keys:
 - accept_appeal: true or false
@@ -523,7 +569,6 @@ Return ONLY the JSON. No markdown. No explanation."""
             }
             self.verdicts[key] = to_json(updated_verdict)
 
-            oath = safe_loads(self.oaths[key], {})
             terminal_statuses = {"fulfilled", "partial", "missed", "excluded", "invalid_oath"}
             oath["status"] = new_status
             oath["settled"] = new_status in terminal_statuses
