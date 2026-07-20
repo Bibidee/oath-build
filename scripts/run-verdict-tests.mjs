@@ -10,7 +10,7 @@ import { createClient, createAccount, chains } from "genlayer-js";
 import fs from "fs";
 
 const RPC_URL = process.env.NEXT_PUBLIC_GENLAYER_RPC_URL || "https://studio.genlayer.com/api";
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS || "0x87d7DcE1E3932a2b6c57278802A14e00a2fA20E4";
+const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_OATH_CONTRACT_ADDRESS || "0x7fD41106Eb637fFa3A6F621Da897c20cae9ACAd2";
 
 const testAccounts = JSON.parse(fs.readFileSync("scripts/.test-accounts.json", "utf8"));
 const byLabel = Object.fromEntries(

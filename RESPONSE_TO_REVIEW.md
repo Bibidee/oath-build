@@ -40,7 +40,7 @@ The appeal callback builds a **fresh** prompt from the appellant's own basis/arg
 
 ## Live production evidence (not staging)
 
-**Deployed contract:** [`0x87d7DcE1E3932a2b6c57278802A14e00a2fA20E4`](https://explorer-studio.genlayer.com/address/0x87d7DcE1E3932a2b6c57278802A14e00a2fA20E4) — this is the redeployed contract carrying the explicit-`exec_prompt` fix.
+**Deployed contract:** [`0x7fD41106Eb637fFa3A6F621Da897c20cae9ACAd2`](https://explorer-studio.genlayer.com/address/0x7fD41106Eb637fFa3A6F621Da897c20cae9ACAd2) — this is the redeployed contract carrying the explicit-`exec_prompt` fix.
 
 **20 real, detailed, strictly-sequential test cases** run against this exact deployment (each transaction fully `FINALIZED` before the next was submitted — nothing batched or parallel), **every settled oath also carrying a real, independent appeal**:
 
@@ -92,6 +92,6 @@ One test (`#17`) surfaced a genuine `MAJORITY_DISAGREE`: independent validators,
 
 - **Live app:** https://oath-build.vercel.app
 - **Repo:** https://github.com/Bibidee/oath-build
-- **Contract:** https://explorer-studio.genlayer.com/address/0x87d7DcE1E3932a2b6c57278802A14e00a2fA20E4
+- **Contract:** https://explorer-studio.genlayer.com/address/0x7fD41106Eb637fFa3A6F621Da897c20cae9ACAd2
 
 All of the above is committed and pushed to `main`, and live on the production deployment.
