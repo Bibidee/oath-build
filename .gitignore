@@ -43,6 +43,7 @@ next-env.d.ts
 # local test accounts/private keys, never commit
 scripts/.test-accounts.json
 scripts/.deploy-key.json
+scripts/.review-round3-accounts.json
 
 # python
 __pycache__/
